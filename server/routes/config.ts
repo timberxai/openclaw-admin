@@ -60,7 +60,7 @@ configRoute.get('/', async (c) => {
   try {
     const config = await readConfig()
     const masked = maskSensitive(config)
-    const configPath = getConfigPath()
+    const configPath = await getConfigPath()
     const fileStat = await stat(configPath)
 
     return c.json({

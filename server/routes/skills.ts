@@ -1,8 +1,8 @@
 import { Hono } from 'hono'
 import { readdir, readFile, writeFile, mkdir } from 'fs/promises'
 import { join, dirname } from 'path'
-import { homedir } from 'os'
-import { readConfig, CONFIG_DIR } from '../lib/config.js'
+import { readConfig } from '../lib/config.js'
+import { getEffectiveConfigDir, getEffectiveBundledSkillsDir } from '../lib/adminSettings.js'
 import { getAgentWorkspace } from '../lib/agents.js'
 
 const skills = new Hono()
@@ -97,20 +97,12 @@ async function scanSkillsDir(
 /**
  * Resolve the three skill directories.
  */
-function getSkillDirs(config: any, agentWorkspace: string | null) {
-  const home = homedir()
-
-  // Bundled skills — shipped with OpenClaw install
-  // Check common locations
-  const bundledDir = join(home, 'openclaw', 'skills')
-
-  // Shared/managed skills
-  const sharedDir = join(CONFIG_DIR, 'skills')
-
-  // Agent workspace skills
+async function getSkillDirs(config: any, agentWorkspace: string | null) {
+  const configDir = await getEffectiveConfigDir()
+  const bundledDir = await getEffectiveBundledSkillsDir()
+  const sharedDir = join(configDir, 'skills')
   const workspaceDir = agentWorkspace ? join(agentWorkspace, 'skills') : null
-
-  return { bundledDir, sharedDir, workspaceDir }
+  return { bundledDir, sharedDir, workspaceDir, configDir }
 }
 
 // GET /api/skills — list all skills, optionally scoped to an agent
@@ -119,7 +111,7 @@ skills.get('/', async (c) => {
     const config = await readConfig()
     const agentId = c.req.query('agentId')
     const skillEntries: Record<string, unknown> = config?.skills?.entries ?? {}
-    const { bundledDir, sharedDir } = getSkillDirs(config, null)
+    const { bundledDir, sharedDir } = await getSkillDirs(config, null)
 
     // Scan bundled + shared
     const [bundledSkills, sharedSkills] = await Promise.all([
@@ -200,7 +192,8 @@ skills.post('/create', async (c) => {
       return c.json({ error: 'Content must include frontmatter (--- markers).' }, 400)
     }
 
-    const skillDir = join(CONFIG_DIR, 'skills', name)
+    const configDir = await getEffectiveConfigDir()
+    const skillDir = join(configDir, 'skills', name)
     const skillMdPath = join(skillDir, 'SKILL.md')
 
     // Check if already exists
@@ -253,7 +246,8 @@ skills.post('/import', async (c) => {
       }
     }
 
-    const skillDir = join(CONFIG_DIR, 'skills', name)
+    const configDir = await getEffectiveConfigDir()
+    const skillDir = join(configDir, 'skills', name)
 
     // Check if already exists
     try {
@@ -292,7 +286,8 @@ skills.post('/import', async (c) => {
 skills.get('/:skillName/content', async (c) => {
   try {
     const skillName = c.req.param('skillName')
-    const skillMdPath = join(CONFIG_DIR, 'skills', skillName, 'SKILL.md')
+    const configDir = await getEffectiveConfigDir()
+    const skillMdPath = join(configDir, 'skills', skillName, 'SKILL.md')
 
     let content: string
     try {
@@ -318,7 +313,8 @@ skills.put('/:skillName', async (c) => {
       return c.json({ error: 'Missing "content" in request body.' }, 400)
     }
 
-    const skillMdPath = join(CONFIG_DIR, 'skills', skillName, 'SKILL.md')
+    const configDir = await getEffectiveConfigDir()
+    const skillMdPath = join(configDir, 'skills', skillName, 'SKILL.md')
 
     // Verify skill exists
     try {
