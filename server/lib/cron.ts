@@ -1,9 +1,9 @@
 import { readFile, writeFile, rename } from 'fs/promises'
 import { execFile } from 'child_process'
-import { homedir } from 'os'
 import { join } from 'path'
+import { CONFIG_DIR } from './config.js'
 
-const JOBS_PATH = join(homedir(), '.openclaw', 'cron', 'jobs.json')
+const JOBS_PATH = join(CONFIG_DIR, 'cron', 'jobs.json')
 
 export interface CronJobFile {
   version: number

@@ -3,7 +3,7 @@ import { readFile, writeFile, mkdir, cp, rm } from 'fs/promises'
 import { join } from 'path'
 import { homedir } from 'os'
 import { getAgents, getAgentPrompt, updateAgentPrompt, getAgentWorkspace } from '../lib/agents.js'
-import { readConfig } from '../lib/config.js'
+import { readConfig, CONFIG_DIR } from '../lib/config.js'
 import { ALLOWED_FILES, getAgentWorkspacePath, fileExists } from './workspace.js'
 import { parseFrontmatter } from './skills.js'
 
@@ -117,6 +117,64 @@ agents.put('/:agentId/workspace/file/:name', async (c) => {
 
 // --- Per-agent skill management ---
 
+// GET /api/agents/:id/skills/:skillName/content — read workspace skill content
+agents.get('/:id/skills/:skillName/content', async (c) => {
+  try {
+    const agentId = c.req.param('id')
+    const skillName = c.req.param('skillName')
+    const config = await readConfig()
+    const ws = getAgentWorkspace(config, agentId)
+    if (!ws) return c.json({ error: `Agent "${agentId}" not found` }, 404)
+
+    const skillMdPath = join(ws, 'skills', skillName, 'SKILL.md')
+    let content: string
+    try {
+      content = await readFile(skillMdPath, 'utf-8')
+    } catch {
+      return c.json({ error: `Skill "${skillName}" not found in agent workspace` }, 404)
+    }
+    return c.json({ name: skillName, content })
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500)
+  }
+})
+
+// PUT /api/agents/:id/skills/:skillName/content — update workspace skill content
+agents.put('/:id/skills/:skillName/content', async (c) => {
+  try {
+    const agentId = c.req.param('id')
+    const skillName = c.req.param('skillName')
+    const body = await c.req.json<{ content: string }>()
+    if (!body.content) return c.json({ error: 'Missing "content"' }, 400)
+
+    const config = await readConfig()
+    const ws = getAgentWorkspace(config, agentId)
+    if (!ws) return c.json({ error: `Agent "${agentId}" not found` }, 404)
+
+    const skillMdPath = join(ws, 'skills', skillName, 'SKILL.md')
+    // Verify exists
+    try {
+      await readFile(skillMdPath, 'utf-8')
+    } catch {
+      return c.json({ error: `Skill "${skillName}" not found in agent workspace` }, 404)
+    }
+
+    await writeFile(skillMdPath, body.content, 'utf-8')
+    const fm = parseFrontmatter(body.content)
+    const skillEntries: Record<string, unknown> = config?.skills?.entries ?? {}
+
+    return c.json({
+      name: fm.name || skillName,
+      description: fm.description || '',
+      group: fm.group || fm.category || 'general',
+      hasConfig: skillName in skillEntries || (fm.name || skillName) in skillEntries,
+      source: 'workspace' as const,
+    })
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500)
+  }
+})
+
 // POST /api/agents/:id/skills/:skillName/install — copy skill to agent workspace
 agents.post('/:id/skills/:skillName/install', async (c) => {
   try {
@@ -131,7 +189,7 @@ agents.post('/:id/skills/:skillName/install', async (c) => {
 
     const home = homedir()
     const bundledDir = join(home, 'openclaw', 'skills')
-    const sharedDir = join(home, '.openclaw', 'skills')
+    const sharedDir = join(CONFIG_DIR, 'skills')
     const destDir = join(agentWorkspacePath, 'skills', skillName)
 
     // Find source: prefer shared over bundled

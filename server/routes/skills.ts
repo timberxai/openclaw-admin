@@ -1,8 +1,8 @@
 import { Hono } from 'hono'
-import { readdir, readFile } from 'fs/promises'
-import { join } from 'path'
+import { readdir, readFile, writeFile, mkdir } from 'fs/promises'
+import { join, dirname } from 'path'
 import { homedir } from 'os'
-import { readConfig } from '../lib/config.js'
+import { readConfig, CONFIG_DIR } from '../lib/config.js'
 import { getAgentWorkspace } from '../lib/agents.js'
 
 const skills = new Hono()
@@ -15,6 +15,7 @@ interface SkillInfo {
   group: string
   hasConfig: boolean
   source: SkillSource
+  agentId?: string  // set when source is 'workspace'
 }
 
 /**
@@ -60,7 +61,8 @@ export function parseFrontmatter(content: string): Record<string, string> {
 async function scanSkillsDir(
   dir: string,
   source: SkillSource,
-  skillEntries: Record<string, unknown>
+  skillEntries: Record<string, unknown>,
+  agentId?: string
 ): Promise<SkillInfo[]> {
   let entries: string[]
   try {
@@ -86,7 +88,7 @@ async function scanSkillsDir(
     const group = fm.group || fm.category || 'general'
     const hasConfig = entry in skillEntries || name in skillEntries
 
-    results.push({ name, description, group, hasConfig, source })
+    results.push({ name, description, group, hasConfig, source, agentId })
   }
 
   return results
@@ -103,7 +105,7 @@ function getSkillDirs(config: any, agentWorkspace: string | null) {
   const bundledDir = join(home, 'openclaw', 'skills')
 
   // Shared/managed skills
-  const sharedDir = join(home, '.openclaw', 'skills')
+  const sharedDir = join(CONFIG_DIR, 'skills')
 
   // Agent workspace skills
   const workspaceDir = agentWorkspace ? join(agentWorkspace, 'skills') : null
@@ -117,23 +119,38 @@ skills.get('/', async (c) => {
     const config = await readConfig()
     const agentId = c.req.query('agentId')
     const skillEntries: Record<string, unknown> = config?.skills?.entries ?? {}
+    const { bundledDir, sharedDir } = getSkillDirs(config, null)
 
-    // Resolve agent workspace if agentId provided
-    let agentWorkspace: string | null = null
-    if (agentId) {
-      agentWorkspace = getAgentWorkspace(config, agentId)
-    }
-
-    const { bundledDir, sharedDir, workspaceDir } = getSkillDirs(config, agentWorkspace)
-
-    // Scan all three layers
-    const [bundledSkills, sharedSkills, workspaceSkills] = await Promise.all([
+    // Scan bundled + shared
+    const [bundledSkills, sharedSkills] = await Promise.all([
       scanSkillsDir(bundledDir, 'bundled', skillEntries),
       scanSkillsDir(sharedDir, 'shared', skillEntries),
-      workspaceDir ? scanSkillsDir(workspaceDir, 'workspace', skillEntries) : Promise.resolve([]),
     ])
 
+    // Scan workspace skills
+    let allWorkspaceSkills: SkillInfo[] = []
+    if (agentId) {
+      // Single agent
+      const ws = getAgentWorkspace(config, agentId)
+      if (ws) {
+        allWorkspaceSkills = await scanSkillsDir(
+          join(ws, 'skills'), 'workspace', skillEntries, agentId
+        )
+      }
+    } else {
+      // No agentId — scan ALL agents' workspaces
+      const agentsList: any[] = config.agents?.list ?? []
+      const scans = agentsList.map(async (agent) => {
+        const ws = agent.workspace ?? config.agents?.defaults?.workspace
+        if (!ws) return []
+        return scanSkillsDir(join(ws, 'skills'), 'workspace', skillEntries, agent.id)
+      })
+      const results = await Promise.all(scans)
+      allWorkspaceSkills = results.flat()
+    }
+
     // Merge with precedence: workspace > shared > bundled
+    // Use name+agentId as key to avoid deduplication across agents
     const merged = new Map<string, SkillInfo>()
 
     for (const skill of bundledSkills) {
@@ -142,8 +159,10 @@ skills.get('/', async (c) => {
     for (const skill of sharedSkills) {
       merged.set(skill.name, skill)
     }
-    for (const skill of workspaceSkills) {
-      merged.set(skill.name, skill)
+    for (const skill of allWorkspaceSkills) {
+      // Workspace skills keyed by agent+name to preserve per-agent entries
+      const key = skill.agentId ? `${skill.agentId}/${skill.name}` : skill.name
+      merged.set(key, skill)
     }
 
     const results = [...merged.values()]
@@ -155,6 +174,172 @@ skills.get('/', async (c) => {
     })
 
     return c.json(results)
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500)
+  }
+})
+
+// Validate skill name: alphanumeric, hyphens, underscores only
+function isValidSkillName(name: string): boolean {
+  return /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(name) && name.length <= 100
+}
+
+// POST /api/skills/create — create a custom shared skill
+skills.post('/create', async (c) => {
+  try {
+    const body = await c.req.json<{ name: string; content: string }>()
+    const { name, content } = body
+
+    if (!name || !isValidSkillName(name)) {
+      return c.json(
+        { error: 'Invalid skill name. Use alphanumeric characters, hyphens, and underscores.' },
+        400
+      )
+    }
+    if (!content || !content.includes('---')) {
+      return c.json({ error: 'Content must include frontmatter (--- markers).' }, 400)
+    }
+
+    const skillDir = join(CONFIG_DIR, 'skills', name)
+    const skillMdPath = join(skillDir, 'SKILL.md')
+
+    // Check if already exists
+    try {
+      await readFile(skillMdPath, 'utf-8')
+      return c.json({ error: `Skill "${name}" already exists.` }, 409)
+    } catch {
+      // Expected — skill doesn't exist yet
+    }
+
+    await mkdir(skillDir, { recursive: true })
+    await writeFile(skillMdPath, content, 'utf-8')
+
+    const fm = parseFrontmatter(content)
+    const config = await readConfig()
+    const skillEntries: Record<string, unknown> = config?.skills?.entries ?? {}
+
+    return c.json({
+      name: fm.name || name,
+      description: fm.description || '',
+      group: fm.group || fm.category || 'general',
+      hasConfig: name in skillEntries || (fm.name || name) in skillEntries,
+      source: 'shared' as const,
+    })
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500)
+  }
+})
+
+// POST /api/skills/import — import a full skill folder (multiple files)
+skills.post('/import', async (c) => {
+  try {
+    const body = await c.req.json<{ name: string; files: { path: string; content: string }[] }>()
+    const { name, files } = body
+
+    if (!name || !isValidSkillName(name)) {
+      return c.json(
+        { error: 'Invalid skill name. Use alphanumeric characters, hyphens, and underscores.' },
+        400
+      )
+    }
+    if (!files || !Array.isArray(files) || files.length === 0) {
+      return c.json({ error: 'No files provided.' }, 400)
+    }
+
+    // Validate all file paths (no directory traversal)
+    for (const file of files) {
+      if (!file.path || file.path.includes('..') || file.path.startsWith('/')) {
+        return c.json({ error: `Invalid file path: ${file.path}` }, 400)
+      }
+    }
+
+    const skillDir = join(CONFIG_DIR, 'skills', name)
+
+    // Check if already exists
+    try {
+      await readFile(join(skillDir, 'SKILL.md'), 'utf-8')
+      return c.json({ error: `Skill "${name}" already exists.` }, 409)
+    } catch {
+      // Expected — skill doesn't exist yet
+    }
+
+    // Write all files
+    for (const file of files) {
+      const filePath = join(skillDir, file.path)
+      await mkdir(dirname(filePath), { recursive: true })
+      await writeFile(filePath, file.content, 'utf-8')
+    }
+
+    // Parse SKILL.md for response
+    const skillMd = files.find((f) => f.path === 'SKILL.md')
+    const fm = skillMd ? parseFrontmatter(skillMd.content) : {}
+    const config = await readConfig()
+    const skillEntries: Record<string, unknown> = config?.skills?.entries ?? {}
+
+    return c.json({
+      name: fm.name || name,
+      description: fm.description || '',
+      group: fm.group || fm.category || 'general',
+      hasConfig: name in skillEntries || (fm.name || name) in skillEntries,
+      source: 'shared' as const,
+    })
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500)
+  }
+})
+
+// GET /api/skills/:skillName/content — get raw SKILL.md content for editing
+skills.get('/:skillName/content', async (c) => {
+  try {
+    const skillName = c.req.param('skillName')
+    const skillMdPath = join(CONFIG_DIR, 'skills', skillName, 'SKILL.md')
+
+    let content: string
+    try {
+      content = await readFile(skillMdPath, 'utf-8')
+    } catch {
+      return c.json({ error: `Skill "${skillName}" not found.` }, 404)
+    }
+
+    return c.json({ name: skillName, content })
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500)
+  }
+})
+
+// PUT /api/skills/:skillName — update an existing shared skill
+skills.put('/:skillName', async (c) => {
+  try {
+    const skillName = c.req.param('skillName')
+    const body = await c.req.json<{ content: string }>()
+    const { content } = body
+
+    if (!content) {
+      return c.json({ error: 'Missing "content" in request body.' }, 400)
+    }
+
+    const skillMdPath = join(CONFIG_DIR, 'skills', skillName, 'SKILL.md')
+
+    // Verify skill exists
+    try {
+      await readFile(skillMdPath, 'utf-8')
+    } catch {
+      return c.json({ error: `Skill "${skillName}" not found.` }, 404)
+    }
+
+    await writeFile(skillMdPath, content, 'utf-8')
+
+    const fm = parseFrontmatter(content)
+    const config = await readConfig()
+    const skillEntries: Record<string, unknown> = config?.skills?.entries ?? {}
+
+    return c.json({
+      name: fm.name || skillName,
+      description: fm.description || '',
+      group: fm.group || fm.category || 'general',
+      hasConfig: skillName in skillEntries || (fm.name || skillName) in skillEntries,
+      source: 'shared' as const,
+    })
   } catch (err: any) {
     return c.json({ error: err.message }, 500)
   }

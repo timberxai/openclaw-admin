@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { skillsApi, type Skill } from '@/lib/api'
+import { skillsApi, type Skill, type SkillContent } from '@/lib/api'
 
 export function useSkills(agentId?: string) {
   return useQuery<Skill[]>({
@@ -24,6 +24,74 @@ export function useSkillRemove(agentId: string) {
     mutationFn: (skillName: string) => skillsApi.remove(agentId, skillName),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['skills', agentId] })
+    },
+  })
+}
+
+export function useSkillCreate() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ name, content }: { name: string; content: string }) =>
+      skillsApi.create(name, content),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['skills'] })
+    },
+  })
+}
+
+export function useSkillImport() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ name, files }: { name: string; files: { path: string; content: string }[] }) =>
+      skillsApi.import(name, files),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['skills'] })
+    },
+  })
+}
+
+/**
+ * Fetch skill content for editing — resolves to the right API
+ * based on source (shared vs workspace).
+ */
+export function useSkillContent(
+  skillName: string | null,
+  source?: 'shared' | 'workspace',
+  agentId?: string
+) {
+  return useQuery<SkillContent>({
+    queryKey: ['skill-content', skillName, source, agentId],
+    queryFn: () => {
+      if (source === 'workspace' && agentId) {
+        return skillsApi.getWorkspaceContent(agentId, skillName!)
+      }
+      return skillsApi.getContent(skillName!)
+    },
+    enabled: !!skillName,
+  })
+}
+
+export function useSkillUpdate() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      skillName,
+      content,
+      source,
+      agentId,
+    }: {
+      skillName: string
+      content: string
+      source?: string
+      agentId?: string
+    }) => {
+      if (source === 'workspace' && agentId) {
+        return skillsApi.updateWorkspace(agentId, skillName, content)
+      }
+      return skillsApi.update(skillName, content)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['skills'] })
     },
   })
 }

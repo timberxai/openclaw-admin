@@ -1,11 +1,11 @@
-import { Key, Download, Trash2, Loader2 } from 'lucide-react'
+import { Key, Download, Trash2, Pencil, Loader2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import type { Skill } from '@/lib/api'
 
 function truncate(text: string, max: number): string {
   if (text.length <= max) return text
-  return text.slice(0, max).trimEnd() + '…'
+  return text.slice(0, max).trimEnd() + '...'
 }
 
 const SOURCE_STYLES = {
@@ -25,6 +25,7 @@ interface SkillCardProps {
   agentId?: string
   onInstall?: (skillName: string) => void
   onRemove?: (skillName: string) => void
+  onEdit?: (skill: Skill) => void
   isInstalling?: boolean
   isRemoving?: boolean
 }
@@ -34,11 +35,13 @@ export default function SkillCard({
   agentId,
   onInstall,
   onRemove,
+  onEdit,
   isInstalling,
   isRemoving,
 }: SkillCardProps) {
   const canInstall = agentId && skill.source !== 'workspace' && onInstall
   const canRemove = agentId && skill.source === 'workspace' && onRemove
+  const canEdit = (skill.source === 'shared' || skill.source === 'workspace') && onEdit
 
   return (
     <div className="flex items-start gap-3 rounded-lg border border-border/40 bg-secondary/40 px-4 py-3 transition-colors hover:bg-secondary/60">
@@ -56,7 +59,9 @@ export default function SkillCard({
             variant="outline"
             className={`px-1.5 py-0 text-[10px] leading-4 ${SOURCE_STYLES[skill.source]}`}
           >
-            {SOURCE_LABELS[skill.source]}
+            {skill.source === 'workspace' && skill.agentId
+              ? `${skill.agentId}`
+              : SOURCE_LABELS[skill.source]}
           </Badge>
         </div>
         <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
@@ -64,7 +69,18 @@ export default function SkillCard({
         </p>
       </div>
 
-      {/* Action button */}
+      {/* Action buttons */}
+      {canEdit && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="mt-0.5 shrink-0 size-8 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
+          onClick={() => onEdit(skill)}
+          title="Edit skill"
+        >
+          <Pencil className="size-3.5" />
+        </Button>
+      )}
       {canInstall && (
         <Button
           variant="ghost"

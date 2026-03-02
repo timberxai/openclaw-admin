@@ -80,6 +80,12 @@ export interface Skill {
   group: string
   hasConfig: boolean
   source: 'bundled' | 'shared' | 'workspace'
+  agentId?: string  // set when source is 'workspace'
+}
+
+export interface SkillContent {
+  name: string
+  content: string
 }
 
 export const skillsApi = {
@@ -89,6 +95,32 @@ export const skillsApi = {
     fetchJSON<Skill>(`/agents/${agentId}/skills/${skillName}/install`, { method: 'POST' }),
   remove: (agentId: string, skillName: string) =>
     fetchJSON<{ success: boolean }>(`/agents/${agentId}/skills/${skillName}`, { method: 'DELETE' }),
+  create: (name: string, content: string) =>
+    fetchJSON<Skill>('/skills/create', {
+      method: 'POST',
+      body: JSON.stringify({ name, content }),
+    }),
+  getContent: (skillName: string) =>
+    fetchJSON<SkillContent>(`/skills/${skillName}/content`),
+  update: (skillName: string, content: string) =>
+    fetchJSON<Skill>(`/skills/${skillName}`, {
+      method: 'PUT',
+      body: JSON.stringify({ content }),
+    }),
+  // Import a full skill folder (multiple files)
+  import: (name: string, files: { path: string; content: string }[]) =>
+    fetchJSON<Skill>('/skills/import', {
+      method: 'POST',
+      body: JSON.stringify({ name, files }),
+    }),
+  // Workspace skill content (per-agent)
+  getWorkspaceContent: (agentId: string, skillName: string) =>
+    fetchJSON<SkillContent>(`/agents/${agentId}/skills/${skillName}/content`),
+  updateWorkspace: (agentId: string, skillName: string, content: string) =>
+    fetchJSON<Skill>(`/agents/${agentId}/skills/${skillName}/content`, {
+      method: 'PUT',
+      body: JSON.stringify({ content }),
+    }),
 }
 
 // === Workspace Types ===

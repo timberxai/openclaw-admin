@@ -8,6 +8,7 @@
     "dev:fe": "vite",
     "dev:api": "tsx watch server/index.ts",
     "build": "tsc -b && vite build",
+    "start": "npx tsx server/index.ts",
     "preview": "vite preview"
   },
   "dependencies": {

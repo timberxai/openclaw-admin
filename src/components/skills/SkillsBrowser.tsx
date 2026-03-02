@@ -2,7 +2,9 @@ import { useState } from 'react'
 import { Search } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { useSkills, useSkillInstall, useSkillRemove } from '@/hooks/useSkills'
+import type { Skill } from '@/lib/api'
 import SkillsGrid from './SkillsGrid'
+import CreateSkillDialog from './CreateSkillDialog'
 
 interface SkillsBrowserProps {
   agentId?: string
@@ -10,6 +12,7 @@ interface SkillsBrowserProps {
 
 export default function SkillsBrowser({ agentId }: SkillsBrowserProps) {
   const [searchQuery, setSearchQuery] = useState('')
+  const [editSkill, setEditSkill] = useState<Skill | null>(null)
   const { data: skills, isLoading, isError, error } = useSkills(agentId)
   const installMutation = agentId ? useSkillInstall(agentId) : null
   const removeMutation = agentId ? useSkillRemove(agentId) : null
@@ -55,12 +58,13 @@ export default function SkillsBrowser({ agentId }: SkillsBrowserProps) {
         <div className="relative flex-1">
           <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Search skills…"
+            placeholder="Search skills..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-8"
           />
         </div>
+        <CreateSkillDialog />
       </div>
 
       {/* Summary */}
@@ -68,12 +72,12 @@ export default function SkillsBrowser({ agentId }: SkillsBrowserProps) {
         {skillList.length} skill{skillList.length !== 1 ? 's' : ''} available
         {agentId && (
           <span>
-            {' '}· <span className="text-green-400">{workspaceCount} installed</span> to agent
+            {' '}&middot; <span className="text-green-400">{workspaceCount} installed</span> to agent
           </span>
         )}
         {searchQuery && (
           <span>
-            {' '}· filtering by "<span className="text-white">{searchQuery}</span>"
+            {' '}&middot; filtering by "<span className="text-white">{searchQuery}</span>"
           </span>
         )}
       </p>
@@ -85,8 +89,16 @@ export default function SkillsBrowser({ agentId }: SkillsBrowserProps) {
         agentId={agentId}
         onInstall={installMutation ? (name) => installMutation.mutate(name) : undefined}
         onRemove={removeMutation ? (name) => removeMutation.mutate(name) : undefined}
+        onEdit={(skill) => setEditSkill(skill)}
         isInstalling={installMutation?.isPending}
         isRemoving={removeMutation?.isPending}
+      />
+
+      {/* Edit dialog (controlled) */}
+      <CreateSkillDialog
+        editSkill={editSkill}
+        open={!!editSkill}
+        onOpenChange={(v) => { if (!v) setEditSkill(null) }}
       />
     </div>
   )

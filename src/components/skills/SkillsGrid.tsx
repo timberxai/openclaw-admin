@@ -18,6 +18,7 @@ interface SkillsGridProps {
   agentId?: string
   onInstall?: (skillName: string) => void
   onRemove?: (skillName: string) => void
+  onEdit?: (skill: Skill) => void
   isInstalling?: boolean
   isRemoving?: boolean
 }
@@ -28,6 +29,7 @@ export default function SkillsGrid({
   agentId,
   onInstall,
   onRemove,
+  onEdit,
   isInstalling,
   isRemoving,
 }: SkillsGridProps) {
@@ -95,6 +97,7 @@ export default function SkillsGrid({
                   agentId={agentId}
                   onInstall={onInstall}
                   onRemove={onRemove}
+                  onEdit={onEdit}
                   isInstalling={isInstalling}
                   isRemoving={isRemoving}
                 />

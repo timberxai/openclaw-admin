@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { serve } from '@hono/node-server'
+import { serveStatic } from '@hono/node-server/serve-static'
 import gateway from './routes/gateway.js'
 import agents from './routes/agents.js'
 import workspace from './routes/workspace.js'
@@ -24,6 +25,12 @@ app.route('/api/cron', cron)
 app.route('/api/channels', channels)
 app.route('/api/config', configRoute)
 
-const port = 5181
-console.log(`Hono server running on http://localhost:${port}`)
-serve({ fetch: app.fetch, port })
+// Serve static files from Vite build output in production
+app.use('/*', serveStatic({ root: './dist' }))
+// SPA fallback: serve index.html for all non-API routes
+app.get('/*', serveStatic({ root: './dist', path: 'index.html' }))
+
+const port = Number(process.env.PORT) || 5181
+const hostname = process.env.HOST || '0.0.0.0'
+console.log(`Hono server running on http://${hostname}:${port}`)
+serve({ fetch: app.fetch, port, hostname })

@@ -190,11 +190,17 @@ export async function getAgents(): Promise<Agent[]> {
 
     const workspace = agent.workspace ?? config.agents?.defaults?.workspace ?? ''
 
+    // model can be a string or {primary, fallbacks} object
+    const rawModel = agent.model ?? config.agents?.defaults?.model ?? null
+    const modelStr = typeof rawModel === 'string'
+      ? rawModel
+      : rawModel?.primary ?? null
+
     return {
       id: agent.id,
       name: agent.identity?.name ?? agent.id,
       emoji: agent.identity?.emoji ?? null,
-      model: agent.model ?? null,
+      model: modelStr,
       workspacePath: workspace,
       avatarUrl: avatarUrls.get(agent.id) ?? null,
       channels,

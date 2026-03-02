@@ -2,8 +2,9 @@ import { readFile, writeFile, rename, copyFile, mkdir } from 'fs/promises'
 import { homedir } from 'os'
 import { join, dirname } from 'path'
 
-const CONFIG_PATH = join(homedir(), '.openclaw', 'openclaw.json')
-const BACKUP_DIR = join(homedir(), '.openclaw', 'backups')
+export const CONFIG_DIR = process.env.OPENCLAW_CONFIG_DIR || join(homedir(), '.openclaw')
+const CONFIG_PATH = join(CONFIG_DIR, 'openclaw.json')
+const BACKUP_DIR = join(CONFIG_DIR, 'backups')
 const MAX_BACKUPS = 10
 
 export async function readConfig(): Promise<any> {
