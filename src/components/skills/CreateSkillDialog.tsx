@@ -179,7 +179,7 @@ export default function CreateSkillDialog({
   }
 
   const dialogContent = (
-    <DialogContent className="sm:max-w-5xl h-[85vh] !grid-rows-none flex flex-col bg-card border-border/50">
+    <DialogContent className="sm:max-w-5xl h-[85vh] flex flex-col gap-0 bg-card border-border/50">
       <DialogHeader className="shrink-0">
         <DialogTitle>{isEditMode ? 'Edit Skill' : 'Create Skill'}</DialogTitle>
       </DialogHeader>

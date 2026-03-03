@@ -216,3 +216,24 @@ export const agentWorkspaceApi = {
       body: JSON.stringify({ content }),
     }),
 }
+
+// === Admin Settings ===
+
+export interface AdminSettingsPaths {
+  configDir: string
+}
+
+export interface AdminSettingsResponse {
+  settings: { paths: AdminSettingsPaths }
+  effective: AdminSettingsPaths
+  envOverrides: { configDir: string | null }
+}
+
+export const adminSettingsApi = {
+  get: () => fetchJSON<AdminSettingsResponse>('/admin-settings'),
+  save: (paths: AdminSettingsPaths) =>
+    fetchJSON<{ ok: boolean }>('/admin-settings', {
+      method: 'PUT',
+      body: JSON.stringify({ paths }),
+    }),
+}

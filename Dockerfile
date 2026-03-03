@@ -1,23 +1,23 @@
+# --- Build admin frontend + TypeScript ---
 FROM openclaw:local AS builder
 
 USER root
 WORKDIR /build
 
-# Install ALL dependencies (including devDeps for tsc/vite)
 COPY package.json package-lock.json ./
 RUN NODE_ENV=development npm ci
 
-# Copy source and build frontend
 COPY . .
 RUN npx tsc -b && npx vite build
 
-# --- Production ---
+# --- Production: admin installed into openclaw image ---
 FROM openclaw:local
 
 USER root
-WORKDIR /app
 
-# Install all deps (tsx is in devDependencies)
+# Install admin into /opt/openclaw-admin/
+WORKDIR /opt/openclaw-admin
+
 COPY package.json package-lock.json ./
 RUN NODE_ENV=development npm ci
 
@@ -28,9 +28,11 @@ COPY --from=builder /build/dist ./dist
 COPY server ./server
 COPY tsconfig.json ./
 
-ENV PORT=3000
-ENV HOST=0.0.0.0
+# Copy entrypoint script
+COPY docker/entrypoint.sh ./docker/entrypoint.sh
+RUN chmod +x ./docker/entrypoint.sh
 
-EXPOSE 3000
+# Restore original workdir for openclaw
+WORKDIR /app
 
-CMD ["npx", "tsx", "server/index.ts"]
+USER node

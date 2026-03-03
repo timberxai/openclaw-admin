@@ -1,10 +1,11 @@
-import { Users, Wrench, MessageSquare, Clock, Settings } from "lucide-react"
+import { Users, Wrench, MessageSquare, Clock, Settings, SlidersHorizontal } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import AgentsPage from "@/pages/AgentsPage"
 import SkillsPage from "@/pages/SkillsPage"
 import ChannelsPage from "@/pages/ChannelsPage"
 import CronPage from "@/pages/CronPage"
 import ConfigPage from "@/pages/ConfigPage"
+import SettingsPage from "@/pages/SettingsPage"
 
 const tabs = [
   { value: "agents", label: "Agents", icon: Users },
@@ -12,6 +13,7 @@ const tabs = [
   { value: "channels", label: "Channels", icon: MessageSquare },
   { value: "cron", label: "Cron", icon: Clock },
   { value: "config", label: "Config", icon: Settings },
+  { value: "settings", label: "Settings", icon: SlidersHorizontal },
 ] as const
 
 export default function TabNav() {
@@ -35,6 +37,7 @@ export default function TabNav() {
       <TabsContent value="channels"><ChannelsPage /></TabsContent>
       <TabsContent value="cron"><CronPage /></TabsContent>
       <TabsContent value="config"><ConfigPage /></TabsContent>
+      <TabsContent value="settings"><SettingsPage /></TabsContent>
     </Tabs>
   )
 }

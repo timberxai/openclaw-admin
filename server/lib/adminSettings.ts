@@ -8,7 +8,6 @@ const ADMIN_SETTINGS_PATH = join(ADMIN_SETTINGS_DIR, 'settings.json')
 export interface AdminSettings {
   paths: {
     configDir: string
-    bundledSkillsDir: string
   }
 }
 
@@ -17,7 +16,6 @@ function getDefaults(): AdminSettings {
   return {
     paths: {
       configDir: join(home, '.openclaw'),
-      bundledSkillsDir: join(home, 'openclaw', 'skills'),
     },
   }
 }
@@ -30,11 +28,23 @@ export async function readAdminSettings(): Promise<AdminSettings> {
     return {
       paths: {
         configDir: parsed?.paths?.configDir || defaults.paths.configDir,
-        bundledSkillsDir: parsed?.paths?.bundledSkillsDir || defaults.paths.bundledSkillsDir,
       },
     }
   } catch {
     return getDefaults()
+  }
+}
+
+/**
+ * Read the raw saved configDir from settings file, or null if not saved.
+ */
+async function readSavedConfigDir(): Promise<string | null> {
+  try {
+    const raw = await readFile(ADMIN_SETTINGS_PATH, 'utf-8')
+    const parsed = JSON.parse(raw)
+    return parsed?.paths?.configDir || null
+  } catch {
+    return null
   }
 }
 
@@ -46,19 +56,13 @@ export async function writeAdminSettings(settings: AdminSettings): Promise<void>
 }
 
 /**
- * Resolve effective configDir: env var takes priority over settings file.
+ * Resolve effective configDir: settings file > env var > default.
+ * User-saved value takes priority over env var.
  */
 export async function getEffectiveConfigDir(): Promise<string> {
+  const saved = await readSavedConfigDir()
+  if (saved) return saved
   if (process.env.OPENCLAW_CONFIG_DIR) return process.env.OPENCLAW_CONFIG_DIR
-  const settings = await readAdminSettings()
-  return settings.paths.configDir
+  return getDefaults().paths.configDir
 }
 
-/**
- * Resolve effective bundledSkillsDir: env var takes priority.
- */
-export async function getEffectiveBundledSkillsDir(): Promise<string> {
-  if (process.env.OPENCLAW_BUNDLED_SKILLS_DIR) return process.env.OPENCLAW_BUNDLED_SKILLS_DIR
-  const settings = await readAdminSettings()
-  return settings.paths.bundledSkillsDir
-}

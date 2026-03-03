@@ -1,6 +1,6 @@
 import { readFile, writeFile } from 'fs/promises'
-import { join } from 'path'
-import { readConfig } from './config.js'
+import { basename, join } from 'path'
+import { getConfigDir, readConfig } from './config.js'
 
 export interface AgentChannel {
   id: string
@@ -159,10 +159,36 @@ async function getChannelNames(
 /**
  * Get all agents from config.agents.list[].
  * Resolves Discord channels and avatars by matching discordAccounts[agentId] directly.
+ * When agents.list is empty/missing (single-container mode), constructs one agent from agents.defaults.
  */
 export async function getAgents(): Promise<Agent[]> {
   const config = await readConfig()
   const agentsList: any[] = config.agents?.list ?? []
+
+  // Single-container mode: no agents.list, use agents.defaults to construct one agent
+  if (agentsList.length === 0) {
+    const defaults = config.agents?.defaults
+    if (!defaults) return []
+
+    const configDir = await getConfigDir()
+    const id = basename(configDir) || 'default'
+    const workspace = defaults.workspace ?? ''
+    const rawModel = defaults.model ?? null
+    const modelStr = typeof rawModel === 'string'
+      ? rawModel
+      : rawModel?.primary ?? null
+
+    return [{
+      id,
+      name: id,
+      emoji: null,
+      model: modelStr,
+      workspacePath: workspace,
+      avatarUrl: null,
+      channels: [],
+    }]
+  }
+
   const discordAccounts: Record<string, any> = config.channels?.discord?.accounts ?? {}
 
   const [avatarUrls, channelNames] = await Promise.all([
@@ -210,12 +236,19 @@ export async function getAgents(): Promise<Agent[]> {
 
 /**
  * Find an agent's workspace path by id.
+ * In single-container mode (no agents.list), falls back to agents.defaults.workspace.
  */
 export function getAgentWorkspace(config: any, agentId: string): string | null {
   const agentsList: any[] = config.agents?.list ?? []
   const agent = agentsList.find((a: any) => a.id === agentId)
-  if (!agent) return null
-  return agent.workspace ?? config.agents?.defaults?.workspace ?? null
+  if (agent) {
+    return agent.workspace ?? config.agents?.defaults?.workspace ?? null
+  }
+  // Single-container mode: no list, use defaults
+  if (agentsList.length === 0 && config.agents?.defaults?.workspace) {
+    return config.agents.defaults.workspace
+  }
+  return null
 }
 
 /**

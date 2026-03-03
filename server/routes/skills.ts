@@ -1,8 +1,8 @@
 import { Hono } from 'hono'
 import { readdir, readFile, writeFile, mkdir } from 'fs/promises'
-import { join, dirname } from 'path'
+import { join, dirname, basename } from 'path'
 import { readConfig } from '../lib/config.js'
-import { getEffectiveConfigDir, getEffectiveBundledSkillsDir } from '../lib/adminSettings.js'
+import { getEffectiveConfigDir } from '../lib/adminSettings.js'
 import { getAgentWorkspace } from '../lib/agents.js'
 
 const skills = new Hono()
@@ -99,10 +99,9 @@ async function scanSkillsDir(
  */
 async function getSkillDirs(config: any, agentWorkspace: string | null) {
   const configDir = await getEffectiveConfigDir()
-  const bundledDir = await getEffectiveBundledSkillsDir()
   const sharedDir = join(configDir, 'skills')
   const workspaceDir = agentWorkspace ? join(agentWorkspace, 'skills') : null
-  return { bundledDir, sharedDir, workspaceDir, configDir }
+  return { sharedDir, workspaceDir, configDir }
 }
 
 // GET /api/skills — list all skills, optionally scoped to an agent
@@ -111,13 +110,10 @@ skills.get('/', async (c) => {
     const config = await readConfig()
     const agentId = c.req.query('agentId')
     const skillEntries: Record<string, unknown> = config?.skills?.entries ?? {}
-    const { bundledDir, sharedDir } = await getSkillDirs(config, null)
+    const { sharedDir } = await getSkillDirs(config, null)
 
-    // Scan bundled + shared
-    const [bundledSkills, sharedSkills] = await Promise.all([
-      scanSkillsDir(bundledDir, 'bundled', skillEntries),
-      scanSkillsDir(sharedDir, 'shared', skillEntries),
-    ])
+    // Scan shared skills
+    const sharedSkills = await scanSkillsDir(sharedDir, 'shared', skillEntries)
 
     // Scan workspace skills
     let allWorkspaceSkills: SkillInfo[] = []
@@ -132,22 +128,28 @@ skills.get('/', async (c) => {
     } else {
       // No agentId — scan ALL agents' workspaces
       const agentsList: any[] = config.agents?.list ?? []
-      const scans = agentsList.map(async (agent) => {
-        const ws = agent.workspace ?? config.agents?.defaults?.workspace
-        if (!ws) return []
-        return scanSkillsDir(join(ws, 'skills'), 'workspace', skillEntries, agent.id)
-      })
-      const results = await Promise.all(scans)
-      allWorkspaceSkills = results.flat()
+      if (agentsList.length > 0) {
+        const scans = agentsList.map(async (agent) => {
+          const ws = agent.workspace ?? config.agents?.defaults?.workspace
+          if (!ws) return []
+          return scanSkillsDir(join(ws, 'skills'), 'workspace', skillEntries, agent.id)
+        })
+        const results = await Promise.all(scans)
+        allWorkspaceSkills = results.flat()
+      } else if (config.agents?.defaults?.workspace) {
+        // Single-container mode: scan default workspace, derive agentId from configDir
+        const configDir = await getEffectiveConfigDir()
+        const defaultAgentId = basename(configDir) || 'default'
+        allWorkspaceSkills = await scanSkillsDir(
+          join(config.agents.defaults.workspace, 'skills'), 'workspace', skillEntries, defaultAgentId
+        )
+      }
     }
 
-    // Merge with precedence: workspace > shared > bundled
+    // Merge with precedence: workspace > shared
     // Use name+agentId as key to avoid deduplication across agents
     const merged = new Map<string, SkillInfo>()
 
-    for (const skill of bundledSkills) {
-      merged.set(skill.name, skill)
-    }
     for (const skill of sharedSkills) {
       merged.set(skill.name, skill)
     }

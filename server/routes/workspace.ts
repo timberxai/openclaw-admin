@@ -18,10 +18,16 @@ export async function getAgentWorkspacePath(agentId: string): Promise<string> {
   const config = await readConfig()
   const agentsList: any[] = config.agents?.list ?? []
   const agent = agentsList.find((a: any) => a.id === agentId)
-  if (!agent) throw new Error(`Agent not found: ${agentId}`)
-  const ws = agent.workspace ?? config.agents?.defaults?.workspace
-  if (!ws) throw new Error(`No workspace configured for agent: ${agentId}`)
-  return ws
+  if (agent) {
+    const ws = agent.workspace ?? config.agents?.defaults?.workspace
+    if (!ws) throw new Error(`No workspace configured for agent: ${agentId}`)
+    return ws
+  }
+  // Single-container mode: no list, use defaults
+  if (agentsList.length === 0 && config.agents?.defaults?.workspace) {
+    return config.agents.defaults.workspace
+  }
+  throw new Error(`Agent not found: ${agentId}`)
 }
 
 export async function fileExists(filePath: string): Promise<boolean> {

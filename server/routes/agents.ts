@@ -1,9 +1,8 @@
 import { Hono } from 'hono'
 import { readFile, writeFile, mkdir, cp, rm } from 'fs/promises'
 import { join } from 'path'
-import { homedir } from 'os'
 import { getAgents, getAgentPrompt, updateAgentPrompt, getAgentWorkspace } from '../lib/agents.js'
-import { readConfig, CONFIG_DIR } from '../lib/config.js'
+import { readConfig, getConfigDir } from '../lib/config.js'
 import { ALLOWED_FILES, getAgentWorkspacePath, fileExists } from './workspace.js'
 import { parseFrontmatter } from './skills.js'
 
@@ -187,26 +186,16 @@ agents.post('/:id/skills/:skillName/install', async (c) => {
       return c.json({ error: `Agent "${agentId}" not found or has no workspace` }, 404)
     }
 
-    const home = homedir()
-    const bundledDir = join(home, 'openclaw', 'skills')
-    const sharedDir = join(CONFIG_DIR, 'skills')
+    const configDir = await getConfigDir()
+    const sharedDir = join(configDir, 'skills')
     const destDir = join(agentWorkspacePath, 'skills', skillName)
 
-    // Find source: prefer shared over bundled
-    let sourceDir: string | null = null
-    for (const dir of [sharedDir, bundledDir]) {
-      const candidate = join(dir, skillName)
-      try {
-        await readFile(join(candidate, 'SKILL.md'), 'utf-8')
-        sourceDir = candidate
-        break
-      } catch {
-        continue
-      }
-    }
-
-    if (!sourceDir) {
-      return c.json({ error: `Skill "${skillName}" not found in bundled or shared locations` }, 404)
+    // Find source from shared skills
+    const sourceDir = join(sharedDir, skillName)
+    try {
+      await readFile(join(sourceDir, 'SKILL.md'), 'utf-8')
+    } catch {
+      return c.json({ error: `Skill "${skillName}" not found in shared skills` }, 404)
     }
 
     // Ensure target skills/ directory exists

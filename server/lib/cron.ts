@@ -1,9 +1,12 @@
 import { readFile, writeFile, rename } from 'fs/promises'
 import { execFile } from 'child_process'
 import { join } from 'path'
-import { CONFIG_DIR } from './config.js'
+import { getConfigDir } from './config.js'
 
-const JOBS_PATH = join(CONFIG_DIR, 'cron', 'jobs.json')
+async function getJobsPath(): Promise<string> {
+  const configDir = await getConfigDir()
+  return join(configDir, 'cron', 'jobs.json')
+}
 
 export interface CronJobFile {
   version: number
@@ -21,16 +24,18 @@ export interface CronJob {
 }
 
 export async function readJobs(): Promise<CronJobFile> {
-  const raw = await readFile(JOBS_PATH, 'utf-8')
+  const jobsPath = await getJobsPath()
+  const raw = await readFile(jobsPath, 'utf-8')
   return JSON.parse(raw)
 }
 
 export async function writeJobs(data: CronJobFile): Promise<void> {
+  const jobsPath = await getJobsPath()
   const json = JSON.stringify(data, null, 2) + '\n'
   JSON.parse(json) // validate roundtrip
-  const tmpPath = JOBS_PATH + '.tmp'
+  const tmpPath = jobsPath + '.tmp'
   await writeFile(tmpPath, json, 'utf-8')
-  await rename(tmpPath, JOBS_PATH)
+  await rename(tmpPath, jobsPath)
 }
 
 export function runJob(id: string): Promise<{ success: boolean; message: string }> {
