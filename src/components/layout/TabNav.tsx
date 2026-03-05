@@ -1,7 +1,8 @@
-import { Users, Wrench, MessageSquare, Clock, Settings, SlidersHorizontal } from "lucide-react"
+import { Users, Wrench, MessageSquare, Clock, Settings, SlidersHorizontal, FolderOpen } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import AgentsPage from "@/pages/AgentsPage"
 import SkillsPage from "@/pages/SkillsPage"
+import FilesPage from "@/pages/FilesPage"
 import ChannelsPage from "@/pages/ChannelsPage"
 import CronPage from "@/pages/CronPage"
 import ConfigPage from "@/pages/ConfigPage"
@@ -10,6 +11,7 @@ import SettingsPage from "@/pages/SettingsPage"
 const tabs = [
   { value: "agents", label: "Agents", icon: Users },
   { value: "skills", label: "Skills", icon: Wrench },
+  { value: "files", label: "Files", icon: FolderOpen },
   { value: "channels", label: "Channels", icon: MessageSquare },
   { value: "cron", label: "Cron", icon: Clock },
   { value: "config", label: "Config", icon: Settings },
@@ -34,6 +36,7 @@ export default function TabNav() {
 
       <TabsContent value="agents"><AgentsPage /></TabsContent>
       <TabsContent value="skills"><SkillsPage /></TabsContent>
+      <TabsContent value="files"><FilesPage /></TabsContent>
       <TabsContent value="channels"><ChannelsPage /></TabsContent>
       <TabsContent value="cron"><CronPage /></TabsContent>
       <TabsContent value="config"><ConfigPage /></TabsContent>

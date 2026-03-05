@@ -10,6 +10,7 @@ import cron from './routes/cron.js'
 import channels from './routes/channels.js'
 import configRoute from './routes/config.js'
 import adminSettingsRoute from './routes/adminSettings.js'
+import uploads from './routes/uploads.js'
 
 const app = new Hono()
 app.use('/*', cors())
@@ -26,6 +27,7 @@ app.route('/api/cron', cron)
 app.route('/api/channels', channels)
 app.route('/api/config', configRoute)
 app.route('/api/admin-settings', adminSettingsRoute)
+app.route('/api/uploads', uploads)
 
 // Serve static files from Vite build output in production
 app.use('/*', serveStatic({ root: './dist' }))

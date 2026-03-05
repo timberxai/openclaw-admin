@@ -217,6 +217,35 @@ export const agentWorkspaceApi = {
     }),
 }
 
+// === Uploads Types ===
+
+export interface UploadedFile {
+  name: string
+  size: number
+  mimeType: string
+  uploadedAt: string
+}
+
+export const uploadsApi = {
+  list: () => fetchJSON<UploadedFile[]>('/uploads'),
+  upload: async (file: File, overwrite = false): Promise<UploadedFile> => {
+    const formData = new FormData()
+    formData.append('file', file)
+    const url = `/api/uploads${overwrite ? '?overwrite=true' : ''}`
+    const res = await fetch(url, { method: 'POST', body: formData })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      throw new Error(body.error || `Upload failed: ${res.status}`)
+    }
+    return res.json()
+  },
+  getDownloadUrl: (filename: string) => `/api/uploads/${encodeURIComponent(filename)}`,
+  remove: (filename: string) =>
+    fetchJSON<{ deleted: boolean; name: string }>(`/uploads/${encodeURIComponent(filename)}`, {
+      method: 'DELETE',
+    }),
+}
+
 // === Admin Settings ===
 
 export interface AdminSettingsPaths {
