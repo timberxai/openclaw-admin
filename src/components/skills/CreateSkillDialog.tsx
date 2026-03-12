@@ -240,8 +240,8 @@ export default function CreateSkillDialog({
 
         {/* Imported files summary */}
         {importedFiles.length > 0 && (
-          <div className="shrink-0 rounded-md border border-border/50 bg-secondary/30 px-3 py-2">
-            <p className="text-xs font-medium text-muted-foreground mb-1">
+          <div className="shrink-0 rounded-md border border-border/50 bg-secondary/30 px-3 py-2 max-h-40 overflow-y-auto">
+            <p className="text-xs font-medium text-muted-foreground mb-1 sticky top-0 bg-secondary/30">
               Imported {importedFiles.length} file{importedFiles.length !== 1 ? 's' : ''}:
             </p>
             <div className="flex flex-wrap gap-1.5">
