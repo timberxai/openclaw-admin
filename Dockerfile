@@ -1,5 +1,5 @@
 # --- Build admin frontend + TypeScript ---
-FROM openclaw:local AS builder
+FROM alpine/openclaw AS builder
 
 USER root
 WORKDIR /build
@@ -11,7 +11,7 @@ COPY . .
 RUN npx tsc -b && npx vite build
 
 # --- Production: admin installed into openclaw image ---
-FROM openclaw:local
+FROM alpine/openclaw
 
 USER root
 
