@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Key, Download, Trash2, Pencil, Loader2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -39,8 +40,12 @@ export default function SkillCard({
   isInstalling,
   isRemoving,
 }: SkillCardProps) {
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const canInstall = agentId && skill.source !== 'workspace' && onInstall
-  const canRemove = agentId && skill.source === 'workspace' && onRemove
+  const canRemove = onRemove && (
+    (agentId && skill.source === 'workspace') ||
+    skill.source === 'shared'
+  )
   const canEdit = (skill.source === 'shared' || skill.source === 'workspace') && onEdit
 
   return (
@@ -97,14 +102,14 @@ export default function SkillCard({
           )}
         </Button>
       )}
-      {canRemove && (
+      {canRemove && !confirmDelete && (
         <Button
           variant="ghost"
           size="icon"
           className="mt-0.5 shrink-0 size-8 text-red-400 hover:text-red-300 hover:bg-red-500/10"
-          onClick={() => onRemove(skill.name)}
+          onClick={() => setConfirmDelete(true)}
           disabled={isRemoving}
-          title="Remove from agent workspace"
+          title={skill.source === 'shared' ? 'Delete shared skill' : 'Remove from agent workspace'}
         >
           {isRemoving ? (
             <Loader2 className="size-3.5 animate-spin" />
@@ -112,6 +117,26 @@ export default function SkillCard({
             <Trash2 className="size-3.5" />
           )}
         </Button>
+      )}
+      {canRemove && confirmDelete && (
+        <div className="flex items-center gap-1 mt-0.5 shrink-0">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-xs h-7 px-2 text-muted-foreground"
+            onClick={() => setConfirmDelete(false)}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-xs h-7 px-2 text-red-400 hover:text-red-300 hover:bg-red-500/10"
+            onClick={() => { onRemove!(skill.name); setConfirmDelete(false) }}
+          >
+            Confirm
+          </Button>
+        </div>
       )}
     </div>
   )

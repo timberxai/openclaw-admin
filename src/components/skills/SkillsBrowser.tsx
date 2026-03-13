@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Search } from 'lucide-react'
 import { Input } from '@/components/ui/input'
-import { useSkills, useSkillInstall, useSkillRemove } from '@/hooks/useSkills'
+import { useSkills, useSkillInstall, useSkillRemove, useSkillDeleteShared } from '@/hooks/useSkills'
 import type { Skill } from '@/lib/api'
 import SkillsGrid from './SkillsGrid'
 import CreateSkillDialog from './CreateSkillDialog'
@@ -16,6 +16,7 @@ export default function SkillsBrowser({ agentId }: SkillsBrowserProps) {
   const { data: skills, isLoading, isError, error } = useSkills(agentId)
   const installMutation = agentId ? useSkillInstall(agentId) : null
   const removeMutation = agentId ? useSkillRemove(agentId) : null
+  const deleteSharedMutation = useSkillDeleteShared()
 
   // Loading skeleton
   if (isLoading) {
@@ -88,10 +89,13 @@ export default function SkillsBrowser({ agentId }: SkillsBrowserProps) {
         searchQuery={searchQuery}
         agentId={agentId}
         onInstall={installMutation ? (name) => installMutation.mutate(name) : undefined}
-        onRemove={removeMutation ? (name) => removeMutation.mutate(name) : undefined}
+        onRemove={agentId
+          ? (removeMutation ? (name) => removeMutation.mutate(name) : undefined)
+          : (name) => deleteSharedMutation.mutate(name)
+        }
         onEdit={(skill) => setEditSkill(skill)}
         isInstalling={installMutation?.isPending}
-        isRemoving={removeMutation?.isPending}
+        isRemoving={removeMutation?.isPending || deleteSharedMutation.isPending}
       />
 
       {/* Edit dialog (controlled) */}

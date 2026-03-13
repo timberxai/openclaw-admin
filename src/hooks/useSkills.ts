@@ -28,6 +28,16 @@ export function useSkillRemove(agentId: string) {
   })
 }
 
+export function useSkillDeleteShared() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (skillName: string) => skillsApi.deleteShared(skillName),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['skills'] })
+    },
+  })
+}
+
 export function useSkillCreate() {
   const queryClient = useQueryClient()
   return useMutation({

@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { readdir, readFile, writeFile, mkdir } from 'fs/promises'
+import { readdir, readFile, writeFile, mkdir, rm } from 'fs/promises'
 import { join, dirname, basename } from 'path'
 import { readConfig } from '../lib/config.js'
 import { getEffectiveConfigDir } from '../lib/adminSettings.js'
@@ -338,6 +338,32 @@ skills.put('/:skillName', async (c) => {
       hasConfig: skillName in skillEntries || (fm.name || skillName) in skillEntries,
       source: 'shared' as const,
     })
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500)
+  }
+})
+
+// DELETE /api/skills/:skillName — delete a shared skill
+skills.delete('/:skillName', async (c) => {
+  try {
+    const skillName = c.req.param('skillName')
+    if (!skillName || !isValidSkillName(skillName)) {
+      return c.json({ error: 'Invalid skill name.' }, 400)
+    }
+
+    const configDir = await getEffectiveConfigDir()
+    const skillDir = join(configDir, 'skills', skillName)
+    const skillMdPath = join(skillDir, 'SKILL.md')
+
+    // Verify skill exists
+    try {
+      await readFile(skillMdPath, 'utf-8')
+    } catch {
+      return c.json({ error: `Skill "${skillName}" not found.` }, 404)
+    }
+
+    await rm(skillDir, { recursive: true, force: true })
+    return c.json({ deleted: true, name: skillName })
   } catch (err: any) {
     return c.json({ error: err.message }, 500)
   }

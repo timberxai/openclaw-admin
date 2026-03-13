@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Save, Loader2, Check, FilePlus } from 'lucide-react'
+import { Save, Loader2, Check, FilePlus, Upload, Download } from 'lucide-react'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -34,6 +34,8 @@ function WorkspaceFilePanel({ fileName, agentId }: WorkspaceFilePanelProps) {
   const saveMutation = useWorkspaceFileSave(agentId)
   const [draft, setDraft] = useState('')
   const [showSuccess, setShowSuccess] = useState(false)
+  const [pendingUpload, setPendingUpload] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const prevFileName = useRef(fileName)
   const is404 = query.isError && query.error?.message?.includes('404')
 
@@ -50,6 +52,7 @@ function WorkspaceFilePanel({ fileName, agentId }: WorkspaceFilePanelProps) {
       prevFileName.current = fileName
       setDraft('')
       setShowSuccess(false)
+      setPendingUpload(null)
       saveMutation.reset()
     }
   }, [fileName, saveMutation])
@@ -82,6 +85,40 @@ function WorkspaceFilePanel({ fileName, agentId }: WorkspaceFilePanelProps) {
       }
     )
   }, [fileName, saveMutation])
+
+  const handleDownload = useCallback(() => {
+    const content = query.data?.content ?? draft
+    const blob = new Blob([content], { type: 'text/markdown' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = fileName
+    a.click()
+    URL.revokeObjectURL(url)
+  }, [draft, query.data?.content, fileName])
+
+  const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const text = await file.text()
+    setPendingUpload(text)
+    e.target.value = ''
+  }, [])
+
+  const handleConfirmUpload = useCallback(() => {
+    if (!pendingUpload) return
+    setDraft(pendingUpload)
+    saveMutation.mutate(
+      { name: fileName, content: pendingUpload },
+      {
+        onSuccess: () => {
+          setShowSuccess(true)
+          setTimeout(() => setShowSuccess(false), 2000)
+        },
+      }
+    )
+    setPendingUpload(null)
+  }, [pendingUpload, fileName, saveMutation])
 
   // Loading
   if (query.isLoading) {
@@ -142,14 +179,36 @@ function WorkspaceFilePanel({ fileName, agentId }: WorkspaceFilePanelProps) {
         onSave={handleSave}
       />
 
+      {/* Upload confirmation */}
+      {pendingUpload !== null && (
+        <div className="rounded-lg border border-yellow-500/50 bg-yellow-500/10 p-3">
+          <p className="text-xs text-yellow-400 font-medium mb-2">
+            Upload will replace current content ({pendingUpload.length.toLocaleString()} chars). Confirm?
+          </p>
+          <div className="flex gap-2">
+            <Button size="sm" variant="ghost" onClick={() => setPendingUpload(null)}>Cancel</Button>
+            <Button size="sm" onClick={handleConfirmUpload}>Confirm & Save</Button>
+          </div>
+        </div>
+      )}
+
       {/* Action row */}
       <div className="flex items-center justify-between">
-        <span className="text-xs text-muted-foreground">
-          {draft.length.toLocaleString()} characters
-          {isDirty && (
-            <span className="ml-2 text-yellow-400">● Modified</span>
-          )}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">
+            {draft.length.toLocaleString()} characters
+            {isDirty && (
+              <span className="ml-2 text-yellow-400">● Modified</span>
+            )}
+          </span>
+          <input ref={fileInputRef} type="file" accept=".md,.txt" className="hidden" onChange={handleFileSelect} />
+          <Button variant="ghost" size="icon" className="size-7 text-muted-foreground hover:text-white" onClick={() => fileInputRef.current?.click()} title="Upload file to replace content">
+            <Upload className="size-3.5" />
+          </Button>
+          <Button variant="ghost" size="icon" className="size-7 text-muted-foreground hover:text-white" onClick={handleDownload} title="Download file">
+            <Download className="size-3.5" />
+          </Button>
+        </div>
 
         <div className="flex items-center gap-3">
           {saveMutation.isError && (

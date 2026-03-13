@@ -113,6 +113,8 @@ export const skillsApi = {
       method: 'POST',
       body: JSON.stringify({ name, files }),
     }),
+  deleteShared: (skillName: string) =>
+    fetchJSON<{ deleted: boolean; name: string }>(`/skills/${skillName}`, { method: 'DELETE' }),
   // Workspace skill content (per-agent)
   getWorkspaceContent: (agentId: string, skillName: string) =>
     fetchJSON<SkillContent>(`/agents/${agentId}/skills/${skillName}/content`),
