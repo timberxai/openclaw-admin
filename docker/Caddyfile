@@ -1,0 +1,15 @@
+{
+	auto_https off
+}
+
+:{$HTTPS_PORT:8443} {
+	tls /etc/caddy/certs/cert.pem /etc/caddy/certs/cert.key
+
+	handle /ui* {
+		reverse_proxy localhost:18789
+	}
+
+	handle {
+		reverse_proxy localhost:3000
+	}
+}

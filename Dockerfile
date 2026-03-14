@@ -15,6 +15,9 @@ FROM alpine/openclaw
 
 USER root
 
+# Install Caddy
+RUN apt-get update && apt-get install -y --no-install-recommends caddy && rm -rf /var/lib/apt/lists/*
+
 # Install admin into /opt/openclaw-admin/
 WORKDIR /opt/openclaw-admin
 
@@ -28,8 +31,9 @@ COPY --from=builder /build/dist ./dist
 COPY server ./server
 COPY tsconfig.json ./
 
-# Copy entrypoint script
+# Copy entrypoint and Caddy config
 COPY docker/entrypoint.sh ./docker/entrypoint.sh
+COPY docker/Caddyfile ./docker/Caddyfile
 RUN chmod +x ./docker/entrypoint.sh
 
 # Restore original workdir for openclaw
