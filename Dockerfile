@@ -15,8 +15,9 @@ FROM alpine/openclaw
 
 USER root
 
-# Install Caddy
-RUN apt-get update && apt-get install -y --no-install-recommends caddy && rm -rf /var/lib/apt/lists/*
+# Install Caddy (Debian 12 bookworm, Aliyun mirror)
+RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources && \
+    apt-get update && apt-get install -y --no-install-recommends caddy && rm -rf /var/lib/apt/lists/*
 
 # Install admin into /opt/openclaw-admin/
 WORKDIR /opt/openclaw-admin
