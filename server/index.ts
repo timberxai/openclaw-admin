@@ -11,13 +11,20 @@ import channels from './routes/channels.js'
 import configRoute from './routes/config.js'
 import adminSettingsRoute from './routes/adminSettings.js'
 import uploads from './routes/uploads.js'
+import authRoute from './routes/auth.js'
+import { authMiddleware } from './middleware/auth.js'
 
 const app = new Hono()
 app.use('/*', cors())
 
+// Public endpoints (no auth required)
 app.get('/api/health', (c) => {
   return c.json({ status: 'ok', timestamp: new Date().toISOString() })
 })
+app.route('/api/auth', authRoute)
+
+// Auth middleware — protects all subsequent /api/* routes
+app.use('/api/*', authMiddleware)
 
 app.route('/api/gateway', gateway)
 app.route('/api/agents', agents)

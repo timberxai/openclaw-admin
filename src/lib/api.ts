@@ -5,6 +5,10 @@ export async function fetchJSON<T>(path: string, init?: RequestInit): Promise<T>
     headers: { 'Content-Type': 'application/json' },
     ...init,
   })
+  if (res.status === 401) {
+    window.location.reload()
+    throw new Error('Unauthorized')
+  }
   if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`)
   return res.json()
 }
