@@ -38,6 +38,13 @@ export function useSkillDeleteShared() {
   })
 }
 
+export function useSkillPublish() {
+  return useMutation({
+    mutationFn: ({ name, source, agentId }: { name: string; source?: string; agentId?: string }) =>
+      skillsApi.publish(name, source, agentId),
+  })
+}
+
 export function useSkillCreate() {
   const queryClient = useQueryClient()
   return useMutation({

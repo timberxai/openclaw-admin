@@ -284,6 +284,66 @@ skills.post('/import', async (c) => {
   }
 })
 
+// POST /api/skills/:skillName/publish — publish to Skills Hub
+skills.post('/:skillName/publish', async (c) => {
+  const skillName = c.req.param('skillName')
+  if (!skillName || !isValidSkillName(skillName)) {
+    return c.json({ error: 'Invalid skill name.' }, 400)
+  }
+
+  const body = await c.req.json<{ source?: string; agentId?: string }>().catch(() => ({}))
+  const config = await readConfig()
+
+  // Resolve SKILL.md path based on source
+  let skillMdPath: string
+  if (body.source === 'workspace' && body.agentId) {
+    const ws = getAgentWorkspace(config, body.agentId)
+    if (!ws) {
+      return c.json({ error: `Agent "${body.agentId}" workspace not found.` }, 404)
+    }
+    skillMdPath = join(ws, 'skills', skillName, 'SKILL.md')
+  } else {
+    const configDir = await getEffectiveConfigDir()
+    skillMdPath = join(configDir, 'skills', skillName, 'SKILL.md')
+  }
+
+  let content: string
+  try {
+    content = await readFile(skillMdPath, 'utf-8')
+  } catch {
+    return c.json({ error: `Skill "${skillName}" not found locally.` }, 404)
+  }
+  const hubUrl = (config as any)?.skillsHub?.url
+  if (!hubUrl) {
+    return c.json({ error: 'Skills Hub not configured.' }, 400)
+  }
+  const token = (config as any)?.gateway?.auth?.token
+  if (!token) {
+    return c.json({ error: 'Gateway token not found.' }, 500)
+  }
+
+  let resp: Response
+  try {
+    resp = await fetch(`${hubUrl}/api/skills/publish/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({ name: skillName, content }),
+    })
+  } catch (err: any) {
+    return c.json({ error: `Failed to connect to Skills Hub: ${err.message}` }, 502)
+  }
+
+  const result: any = await resp.json().catch(() => ({}))
+  if (!resp.ok) {
+    const code = resp.status >= 400 && resp.status < 600 ? resp.status : 502
+    return c.json({ error: result.error || `Hub responded with ${resp.status}` }, code as any)
+  }
+  return c.json(result)
+})
+
 // GET /api/skills/:skillName/content — get raw SKILL.md content for editing
 skills.get('/:skillName/content', async (c) => {
   try {

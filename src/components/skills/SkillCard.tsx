@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Key, Download, Trash2, Pencil, Loader2 } from 'lucide-react'
+import { Key, Download, Trash2, Pencil, Loader2, Upload } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import type { Skill } from '@/lib/api'
@@ -27,8 +27,10 @@ interface SkillCardProps {
   onInstall?: (skillName: string) => void
   onRemove?: (skillName: string) => void
   onEdit?: (skill: Skill) => void
+  onPublish?: (skill: Skill) => void
   isInstalling?: boolean
   isRemoving?: boolean
+  publishingSkill?: string
 }
 
 export default function SkillCard({
@@ -37,8 +39,10 @@ export default function SkillCard({
   onInstall,
   onRemove,
   onEdit,
+  onPublish,
   isInstalling,
   isRemoving,
+  publishingSkill,
 }: SkillCardProps) {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const canInstall = agentId && skill.source !== 'workspace' && onInstall
@@ -84,6 +88,22 @@ export default function SkillCard({
           title="Edit skill"
         >
           <Pencil className="size-3.5" />
+        </Button>
+      )}
+      {(skill.source === 'shared' || skill.source === 'workspace') && onPublish && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="mt-0.5 shrink-0 size-8 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10"
+          onClick={() => onPublish(skill)}
+          disabled={publishingSkill === skill.name}
+          title="Publish to Skills Hub"
+        >
+          {publishingSkill === skill.name ? (
+            <Loader2 className="size-3.5 animate-spin" />
+          ) : (
+            <Upload className="size-3.5" />
+          )}
         </Button>
       )}
       {canInstall && (

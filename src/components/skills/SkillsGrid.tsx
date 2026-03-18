@@ -19,8 +19,10 @@ interface SkillsGridProps {
   onInstall?: (skillName: string) => void
   onRemove?: (skillName: string) => void
   onEdit?: (skill: Skill) => void
+  onPublish?: (skill: Skill) => void
   isInstalling?: boolean
   isRemoving?: boolean
+  publishingSkill?: string
 }
 
 export default function SkillsGrid({
@@ -30,8 +32,10 @@ export default function SkillsGrid({
   onInstall,
   onRemove,
   onEdit,
+  onPublish,
   isInstalling,
   isRemoving,
+  publishingSkill,
 }: SkillsGridProps) {
   // Filter skills by search query
   const query = searchQuery.toLowerCase()
@@ -98,8 +102,10 @@ export default function SkillsGrid({
                   onInstall={onInstall}
                   onRemove={onRemove}
                   onEdit={onEdit}
+                  onPublish={onPublish}
                   isInstalling={isInstalling}
                   isRemoving={isRemoving}
+                  publishingSkill={publishingSkill}
                 />
               ))}
             </div>

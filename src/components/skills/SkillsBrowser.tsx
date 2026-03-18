@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Search } from 'lucide-react'
 import { Input } from '@/components/ui/input'
-import { useSkills, useSkillInstall, useSkillRemove, useSkillDeleteShared } from '@/hooks/useSkills'
+import { useSkills, useSkillInstall, useSkillRemove, useSkillDeleteShared, useSkillPublish } from '@/hooks/useSkills'
 import type { Skill } from '@/lib/api'
 import SkillsGrid from './SkillsGrid'
 import CreateSkillDialog from './CreateSkillDialog'
@@ -17,6 +17,7 @@ export default function SkillsBrowser({ agentId }: SkillsBrowserProps) {
   const installMutation = agentId ? useSkillInstall(agentId) : null
   const removeMutation = agentId ? useSkillRemove(agentId) : null
   const deleteSharedMutation = useSkillDeleteShared()
+  const publishMutation = useSkillPublish()
 
   // Loading skeleton
   if (isLoading) {
@@ -94,8 +95,10 @@ export default function SkillsBrowser({ agentId }: SkillsBrowserProps) {
           : (name) => deleteSharedMutation.mutate(name)
         }
         onEdit={(skill) => setEditSkill(skill)}
+        onPublish={(skill) => publishMutation.mutate({ name: skill.name, source: skill.source, agentId: skill.agentId })}
         isInstalling={installMutation?.isPending}
         isRemoving={removeMutation?.isPending || deleteSharedMutation.isPending}
+        publishingSkill={publishMutation.isPending ? publishMutation.variables?.name : undefined}
       />
 
       {/* Edit dialog (controlled) */}

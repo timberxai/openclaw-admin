@@ -119,6 +119,14 @@ export const skillsApi = {
     }),
   deleteShared: (skillName: string) =>
     fetchJSON<{ deleted: boolean; name: string }>(`/skills/${skillName}`, { method: 'DELETE' }),
+  publish: (skillName: string, source?: string, agentId?: string) =>
+    fetchJSON<{ success: boolean; name: string; created: boolean }>(
+      `/skills/${skillName}/publish`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ source, agentId }),
+      }
+    ),
   // Workspace skill content (per-agent)
   getWorkspaceContent: (agentId: string, skillName: string) =>
     fetchJSON<SkillContent>(`/agents/${agentId}/skills/${skillName}/content`),
