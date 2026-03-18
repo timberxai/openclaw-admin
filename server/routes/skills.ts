@@ -313,9 +313,9 @@ skills.post('/:skillName/publish', async (c) => {
   } catch {
     return c.json({ error: `Skill "${skillName}" not found locally.` }, 404)
   }
-  const hubUrl = (config as any)?.skillsHub?.url
+  const hubUrl = process.env.SKILLS_HUB_URL
   if (!hubUrl) {
-    return c.json({ error: 'Skills Hub not configured.' }, 400)
+    return c.json({ error: 'Skills Hub not configured (SKILLS_HUB_URL env not set).' }, 400)
   }
   const token = (config as any)?.gateway?.auth?.token
   if (!token) {
