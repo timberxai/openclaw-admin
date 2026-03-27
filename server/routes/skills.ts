@@ -284,6 +284,30 @@ skills.post('/import', async (c) => {
   }
 })
 
+// Create a tar.gz of a skill directory, excluding junk dirs.
+// Returns the archive as a Buffer.
+import { execFileSync } from 'child_process'
+import { tmpdir } from 'os'
+
+const SKIP_DIRS_TAR = ['pip_packages', '__pycache__', 'node_modules', '.git']
+
+function createSkillArchive(skillDir: string, skillName: string): Buffer {
+  const tmpFile = join(tmpdir(), `skill-publish-${skillName}-${Date.now()}.tar.gz`)
+  const excludes = SKIP_DIRS_TAR.flatMap(d => ['--exclude', d])
+  try {
+    execFileSync('tar', [
+      'czf', tmpFile,
+      ...excludes,
+      '-C', dirname(skillDir),
+      basename(skillDir),
+    ], { timeout: 30_000 })
+    const buf = require('fs').readFileSync(tmpFile)
+    return buf
+  } finally {
+    try { require('fs').unlinkSync(tmpFile) } catch {}
+  }
+}
+
 // POST /api/skills/:skillName/publish — publish to Skills Hub
 skills.post('/:skillName/publish', async (c) => {
   const skillName = c.req.param('skillName')
@@ -294,25 +318,27 @@ skills.post('/:skillName/publish', async (c) => {
   const body = await c.req.json<{ source?: string; agentId?: string }>().catch(() => ({}))
   const config = await readConfig()
 
-  // Resolve SKILL.md path based on source
-  let skillMdPath: string
+  // Resolve skill directory based on source
+  let skillDir: string
   if (body.source === 'workspace' && body.agentId) {
     const ws = getAgentWorkspace(config, body.agentId)
     if (!ws) {
       return c.json({ error: `Agent "${body.agentId}" workspace not found.` }, 404)
     }
-    skillMdPath = join(ws, 'skills', skillName, 'SKILL.md')
+    skillDir = join(ws, 'skills', skillName)
   } else {
     const configDir = await getEffectiveConfigDir()
-    skillMdPath = join(configDir, 'skills', skillName, 'SKILL.md')
+    skillDir = join(configDir, 'skills', skillName)
   }
 
+  // Verify SKILL.md exists
   let content: string
   try {
-    content = await readFile(skillMdPath, 'utf-8')
+    content = await readFile(join(skillDir, 'SKILL.md'), 'utf-8')
   } catch {
     return c.json({ error: `Skill "${skillName}" not found locally.` }, 404)
   }
+
   const hubUrl = process.env.SKILLS_HUB_URL
   if (!hubUrl) {
     return c.json({ error: 'Skills Hub not configured (SKILLS_HUB_URL env not set).' }, 400)
@@ -322,15 +348,28 @@ skills.post('/:skillName/publish', async (c) => {
     return c.json({ error: 'Gateway token not found.' }, 500)
   }
 
+  // Create tar.gz archive of the skill directory
+  let archive: Buffer
+  try {
+    archive = createSkillArchive(skillDir, skillName)
+  } catch (err: any) {
+    return c.json({ error: `Failed to create archive: ${err.message}` }, 500)
+  }
+
+  // Upload as multipart/form-data
+  const formData = new FormData()
+  formData.append('name', skillName)
+  formData.append('content', content)
+  formData.append('archive', new Blob([archive], { type: 'application/gzip' }), `${skillName}.tar.gz`)
+
   let resp: Response
   try {
     resp = await fetch(`${hubUrl}/api/skills/publish/`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`,
       },
-      body: JSON.stringify({ name: skillName, content }),
+      body: formData,
     })
   } catch (err: any) {
     return c.json({ error: `Failed to connect to Skills Hub: ${err.message}` }, 502)
