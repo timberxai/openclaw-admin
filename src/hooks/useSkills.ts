@@ -42,6 +42,12 @@ export function useSkillPublish() {
   return useMutation({
     mutationFn: ({ name, source, agentId }: { name: string; source?: string; agentId?: string }) =>
       skillsApi.publish(name, source, agentId),
+    onSuccess: (_data, variables) => {
+      alert(`Skill "${variables.name}" published to Skills Hub successfully.`)
+    },
+    onError: (error: Error, variables) => {
+      alert(`Failed to publish "${variables.name}": ${error.message}`)
+    },
   })
 }
 

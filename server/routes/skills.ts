@@ -287,6 +287,7 @@ skills.post('/import', async (c) => {
 // Create a tar.gz of a skill directory, excluding junk dirs.
 // Returns the archive as a Buffer.
 import { execFileSync } from 'child_process'
+import { readFileSync, unlinkSync } from 'fs'
 import { tmpdir } from 'os'
 
 const SKIP_DIRS_TAR = ['pip_packages', '__pycache__', 'node_modules', '.git']
@@ -301,10 +302,9 @@ function createSkillArchive(skillDir: string, skillName: string): Buffer {
       '-C', dirname(skillDir),
       basename(skillDir),
     ], { timeout: 30_000 })
-    const buf = require('fs').readFileSync(tmpFile)
-    return buf
+    return readFileSync(tmpFile)
   } finally {
-    try { require('fs').unlinkSync(tmpFile) } catch {}
+    try { unlinkSync(tmpFile) } catch {}
   }
 }
 
@@ -318,24 +318,44 @@ skills.post('/:skillName/publish', async (c) => {
   const body = await c.req.json<{ source?: string; agentId?: string }>().catch(() => ({}))
   const config = await readConfig()
 
-  // Resolve skill directory based on source
-  let skillDir: string
+  // Resolve skill directory — try source hint first, then search all locations
+  let skillDir: string | null = null
+  let content: string | null = null
+
   if (body.source === 'workspace' && body.agentId) {
     const ws = getAgentWorkspace(config, body.agentId)
-    if (!ws) {
-      return c.json({ error: `Agent "${body.agentId}" workspace not found.` }, 404)
+    if (ws) {
+      const candidate = join(ws, 'skills', skillName)
+      try {
+        content = await readFile(join(candidate, 'SKILL.md'), 'utf-8')
+        skillDir = candidate
+      } catch {}
     }
-    skillDir = join(ws, 'skills', skillName)
-  } else {
-    const configDir = await getEffectiveConfigDir()
-    skillDir = join(configDir, 'skills', skillName)
   }
 
-  // Verify SKILL.md exists
-  let content: string
-  try {
-    content = await readFile(join(skillDir, 'SKILL.md'), 'utf-8')
-  } catch {
+  if (!skillDir) {
+    // Try shared skills (configDir/skills/)
+    const configDir = await getEffectiveConfigDir()
+    const candidate = join(configDir, 'skills', skillName)
+    try {
+      content = await readFile(join(candidate, 'SKILL.md'), 'utf-8')
+      skillDir = candidate
+    } catch {}
+  }
+
+  if (!skillDir) {
+    // Try workspace skills (workspace/skills/)
+    const workspace = (config as any)?.agents?.defaults?.workspace
+    if (workspace) {
+      const candidate = join(workspace, 'skills', skillName)
+      try {
+        content = await readFile(join(candidate, 'SKILL.md'), 'utf-8')
+        skillDir = candidate
+      } catch {}
+    }
+  }
+
+  if (!skillDir || !content) {
     return c.json({ error: `Skill "${skillName}" not found locally.` }, 404)
   }
 
