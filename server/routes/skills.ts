@@ -95,6 +95,46 @@ async function scanSkillsDir(
 }
 
 /**
+ * Find a skill directory by matching frontmatter `name` field.
+ * Falls back to scanning all subdirectories when the directory name
+ * doesn't match the skill's display name.
+ * Returns { dir, content } or null.
+ */
+async function findSkillByName(
+  parentDir: string,
+  targetName: string
+): Promise<{ dir: string; content: string } | null> {
+  // Fast path: directory name matches skill name
+  const directPath = join(parentDir, targetName, 'SKILL.md')
+  try {
+    const content = await readFile(directPath, 'utf-8')
+    return { dir: join(parentDir, targetName), content }
+  } catch {}
+
+  // Slow path: scan all subdirectories for matching frontmatter name
+  let entries: string[]
+  try {
+    entries = await readdir(parentDir)
+  } catch {
+    return null
+  }
+  for (const entry of entries) {
+    const skillMdPath = join(parentDir, entry, 'SKILL.md')
+    let raw: string
+    try {
+      raw = await readFile(skillMdPath, 'utf-8')
+    } catch {
+      continue
+    }
+    const fm = parseFrontmatter(raw)
+    if ((fm.name || entry) === targetName) {
+      return { dir: join(parentDir, entry), content: raw }
+    }
+  }
+  return null
+}
+
+/**
  * Resolve the three skill directories.
  */
 async function getSkillDirs(config: any, agentWorkspace: string | null) {
@@ -325,33 +365,24 @@ skills.post('/:skillName/publish', async (c) => {
   if (body.source === 'workspace' && body.agentId) {
     const ws = getAgentWorkspace(config, body.agentId)
     if (ws) {
-      const candidate = join(ws, 'skills', skillName)
-      try {
-        content = await readFile(join(candidate, 'SKILL.md'), 'utf-8')
-        skillDir = candidate
-      } catch {}
+      const found = await findSkillByName(join(ws, 'skills'), skillName)
+      if (found) { skillDir = found.dir; content = found.content }
     }
   }
 
   if (!skillDir) {
     // Try shared skills (configDir/skills/)
     const configDir = await getEffectiveConfigDir()
-    const candidate = join(configDir, 'skills', skillName)
-    try {
-      content = await readFile(join(candidate, 'SKILL.md'), 'utf-8')
-      skillDir = candidate
-    } catch {}
+    const found = await findSkillByName(join(configDir, 'skills'), skillName)
+    if (found) { skillDir = found.dir; content = found.content }
   }
 
   if (!skillDir) {
     // Try workspace skills (workspace/skills/)
     const workspace = (config as any)?.agents?.defaults?.workspace
     if (workspace) {
-      const candidate = join(workspace, 'skills', skillName)
-      try {
-        content = await readFile(join(candidate, 'SKILL.md'), 'utf-8')
-        skillDir = candidate
-      } catch {}
+      const found = await findSkillByName(join(workspace, 'skills'), skillName)
+      if (found) { skillDir = found.dir; content = found.content }
     }
   }
 
@@ -408,16 +439,12 @@ skills.get('/:skillName/content', async (c) => {
   try {
     const skillName = c.req.param('skillName')
     const configDir = await getEffectiveConfigDir()
-    const skillMdPath = join(configDir, 'skills', skillName, 'SKILL.md')
-
-    let content: string
-    try {
-      content = await readFile(skillMdPath, 'utf-8')
-    } catch {
+    const found = await findSkillByName(join(configDir, 'skills'), skillName)
+    if (!found) {
       return c.json({ error: `Skill "${skillName}" not found.` }, 404)
     }
 
-    return c.json({ name: skillName, content })
+    return c.json({ name: skillName, content: found.content })
   } catch (err: any) {
     return c.json({ error: err.message }, 500)
   }
@@ -435,15 +462,12 @@ skills.put('/:skillName', async (c) => {
     }
 
     const configDir = await getEffectiveConfigDir()
-    const skillMdPath = join(configDir, 'skills', skillName, 'SKILL.md')
-
-    // Verify skill exists
-    try {
-      await readFile(skillMdPath, 'utf-8')
-    } catch {
+    const found = await findSkillByName(join(configDir, 'skills'), skillName)
+    if (!found) {
       return c.json({ error: `Skill "${skillName}" not found.` }, 404)
     }
 
+    const skillMdPath = join(found.dir, 'SKILL.md')
     await writeFile(skillMdPath, content, 'utf-8')
 
     const fm = parseFrontmatter(content)
@@ -471,17 +495,12 @@ skills.delete('/:skillName', async (c) => {
     }
 
     const configDir = await getEffectiveConfigDir()
-    const skillDir = join(configDir, 'skills', skillName)
-    const skillMdPath = join(skillDir, 'SKILL.md')
-
-    // Verify skill exists
-    try {
-      await readFile(skillMdPath, 'utf-8')
-    } catch {
+    const found = await findSkillByName(join(configDir, 'skills'), skillName)
+    if (!found) {
       return c.json({ error: `Skill "${skillName}" not found.` }, 404)
     }
 
-    await rm(skillDir, { recursive: true, force: true })
+    await rm(found.dir, { recursive: true, force: true })
     return c.json({ deleted: true, name: skillName })
   } catch (err: any) {
     return c.json({ error: err.message }, 500)
