@@ -16,8 +16,17 @@ USER root
 # The built assets land in hermes_cli/web_dist/ (per vite outDir setting).
 RUN cd /opt/hermes/web && npm install && npm run build && rm package.json
 
-# Add startup script that runs both gateway + dashboard
+# Install Caddy for TLS termination (same approach as openclaw-admin).
+# Caddy terminates HTTPS on 9119 and proxies to hermes dashboard on 9120.
+RUN apt-get update -qq && apt-get install -y --no-install-recommends debian-keyring debian-archive-keyring apt-transport-https curl \
+ && curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg \
+ && curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list \
+ && apt-get update -qq && apt-get install -y --no-install-recommends caddy \
+ && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Add startup script and Caddyfile
 COPY docker/start-hermes.sh /opt/start-hermes.sh
+COPY docker/hermes-caddy.Caddyfile /opt/hermes-caddy.Caddyfile
 RUN chmod +x /opt/start-hermes.sh
 
 ENTRYPOINT ["/opt/start-hermes.sh"]
