@@ -1,0 +1,16 @@
+# hermes-admin image — nousresearch/hermes-agent:latest with web UI pre-built.
+#
+# The official image runs `npm install && npm run build` on first dashboard
+# startup, which requires internet access and is unreliable in production.
+# This Dockerfile bakes the build in at image creation time so the dashboard
+# starts instantly with no network dependencies.
+
+FROM nousresearch/hermes-agent:latest
+
+USER root
+
+RUN cd /opt/hermes/web && npm install && npm run build
+
+# Default command stays the same as the base image — this Dockerfile only
+# pre-builds the web UI assets. Container startup (gateway run / dashboard)
+# is still controlled by the caller.
