@@ -10,8 +10,11 @@ FROM nousresearch/hermes-agent:latest
 
 USER root
 
-# Pre-build dashboard web UI so it starts instantly without network access
-RUN cd /opt/hermes/web && npm install && npm run build
+# Pre-build dashboard web UI so it starts instantly without network access.
+# After the build, remove package.json so hermes's _build_web_ui() skips the
+# npm-install check at runtime (it returns early when package.json is absent).
+# The built assets land in hermes_cli/web_dist/ (per vite outDir setting).
+RUN cd /opt/hermes/web && npm install && npm run build && rm package.json
 
 # Add startup script that runs both gateway + dashboard
 COPY docker/start-hermes.sh /opt/start-hermes.sh
