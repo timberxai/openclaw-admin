@@ -24,6 +24,10 @@ RUN apt-get update -qq && apt-get install -y --no-install-recommends curl tar \
  && chmod +x /usr/local/bin/caddy \
  && apt-get clean && rm -rf /var/lib/apt/lists/*
 
+# Install lark-cli globally so the hermes agent can create/update Feishu docs
+# via terminal commands instead of relying on MCP tools.
+RUN npm install -g @larksuite/cli
+
 # Add startup script and Caddyfile
 COPY docker/start-hermes.sh /opt/start-hermes.sh
 COPY docker/hermes-caddy.Caddyfile /opt/hermes-caddy.Caddyfile
