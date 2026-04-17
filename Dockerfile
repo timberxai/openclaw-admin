@@ -81,6 +81,12 @@ RUN node /app/node_modules/playwright-core/cli.js install chromium \
 # Ensure fontconfig cache is writable by any user
 RUN mkdir -p /var/cache/fontconfig && chmod 777 /var/cache/fontconfig
 
+# Install lark-cli (official Feishu CLI) and openclaw-lark-tools (plugin
+# installer). Both baked into the image so containers don't need network /
+# npx at first start. closeclaw writes lark-cli/config.json at container
+# launch and mounts it at /home/node/.lark-cli.
+RUN npm install -g @larksuite/cli @larksuite/openclaw-lark-tools
+
 # Restore original workdir for openclaw
 WORKDIR /app
 
