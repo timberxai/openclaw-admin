@@ -5,7 +5,7 @@ import { readConfig } from '../lib/config.js'
 
 const workspace = new Hono()
 
-export const ALLOWED_FILES = ['SOUL.md', 'USER.md', 'AGENTS.md', 'MEMORY.md', 'TOOLS.md'] as const
+export const ALLOWED_FILES = ['SOUL.md', 'USER.md', 'AGENTS.md', 'MEMORY.md', 'TOOLS.md', 'HEARTBEAT.md'] as const
 
 async function getDefaultWorkspacePath(): Promise<string> {
   const config = await readConfig()

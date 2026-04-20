@@ -11,6 +11,7 @@ import channels from './routes/channels.js'
 import configRoute from './routes/config.js'
 import adminSettingsRoute from './routes/adminSettings.js'
 import uploads from './routes/uploads.js'
+import heartbeat from './routes/heartbeat.js'
 import authRoute from './routes/auth.js'
 import { authMiddleware } from './middleware/auth.js'
 
@@ -35,6 +36,7 @@ app.route('/api/channels', channels)
 app.route('/api/config', configRoute)
 app.route('/api/admin-settings', adminSettingsRoute)
 app.route('/api/uploads', uploads)
+app.route('/api/heartbeat', heartbeat)
 
 // Serve static files from Vite build output in production
 app.use('/*', serveStatic({ root: './dist' }))

@@ -260,6 +260,30 @@ export const uploadsApi = {
     }),
 }
 
+// === Heartbeat Types ===
+
+export interface HeartbeatConfig {
+  every?: string
+  target?: string
+  model?: string
+  lightContext?: boolean
+  isolatedSession?: boolean
+  includeReasoning?: boolean
+  activeHours?: { start: string; end: string; timezone?: string }
+  prompt?: string
+  ackMaxChars?: number
+}
+
+export interface HeartbeatSettings {
+  defaults: HeartbeatConfig
+}
+
+export const heartbeatApi = {
+  get: () => fetchJSON<HeartbeatSettings>('/heartbeat'),
+  save: (data: HeartbeatSettings) =>
+    fetchJSON<HeartbeatSettings>('/heartbeat', { method: 'PUT', body: JSON.stringify(data) }),
+}
+
 // === Admin Settings ===
 
 export interface AdminSettingsPaths {
