@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
-import { readdir, readFile, writeFile, mkdir, rm } from 'fs/promises'
-import { join, dirname, basename } from 'path'
+import { readdir, readFile, writeFile, mkdir, rm, stat } from 'fs/promises'
+import { join, dirname, basename, resolve, relative, isAbsolute } from 'path'
 import { readConfig } from '../lib/config.js'
 import { getEffectiveConfigDir } from '../lib/adminSettings.js'
 import { getAgentWorkspace } from '../lib/agents.js'
@@ -84,6 +84,13 @@ async function scanSkillsDir(
 
     const fm = parseFrontmatter(raw)
     const name = fm.name || entry
+
+    // Skip skills with illegal frontmatter names to avoid broken URLs
+    if (fm.name && !isValidSkillName(fm.name)) {
+      console.warn(`[skills] skipping ${dir}/${entry}: frontmatter name "${fm.name}" is not URL-safe`)
+      continue
+    }
+
     const description = fm.description || ''
     const group = fm.group || fm.category || 'general'
     const hasConfig = entry in skillEntries || name in skillEntries
@@ -234,6 +241,14 @@ skills.post('/create', async (c) => {
       return c.json({ error: 'Content must include frontmatter (--- markers).' }, 400)
     }
 
+    const fm = parseFrontmatter(content)
+    if (fm.name && !isValidSkillName(fm.name)) {
+      return c.json(
+        { error: `Invalid name in SKILL.md frontmatter: "${fm.name}". Use only letters, digits, hyphens, and underscores.` },
+        400
+      )
+    }
+
     const configDir = await getEffectiveConfigDir()
     const skillDir = join(configDir, 'skills', name)
     const skillMdPath = join(skillDir, 'SKILL.md')
@@ -241,15 +256,14 @@ skills.post('/create', async (c) => {
     // Check if already exists
     try {
       await readFile(skillMdPath, 'utf-8')
-      return c.json({ error: `Skill "${name}" already exists.` }, 409)
-    } catch {
-      // Expected — skill doesn't exist yet
+      return c.json({ error: `A skill with directory name "${name}" already exists. Use the edit dialog to update it, or delete it first to re-upload.` }, 409)
+    } catch (err: any) {
+      if (err.code !== 'ENOENT') throw err
     }
 
     await mkdir(skillDir, { recursive: true })
     await writeFile(skillMdPath, content, 'utf-8')
 
-    const fm = parseFrontmatter(content)
     const config = await readConfig()
     const skillEntries: Record<string, unknown> = config?.skills?.entries ?? {}
 
@@ -281,22 +295,36 @@ skills.post('/import', async (c) => {
       return c.json({ error: 'No files provided.' }, 400)
     }
 
-    // Validate all file paths (no directory traversal)
-    for (const file of files) {
-      if (!file.path || file.path.includes('..') || file.path.startsWith('/')) {
-        return c.json({ error: `Invalid file path: ${file.path}` }, 400)
-      }
+    const skillMd = files.find((f) => f.path === 'SKILL.md')
+    const fm = skillMd ? parseFrontmatter(skillMd.content) : {}
+    if (fm.name && !isValidSkillName(fm.name)) {
+      return c.json(
+        { error: `Invalid name in SKILL.md frontmatter: "${fm.name}". Use only letters, digits, hyphens, and underscores.` },
+        400
+      )
     }
 
     const configDir = await getEffectiveConfigDir()
     const skillDir = join(configDir, 'skills', name)
 
+    // Validate all file paths (resolve + relative check to prevent traversal)
+    for (const file of files) {
+      if (!file.path) {
+        return c.json({ error: 'Invalid file path.' }, 400)
+      }
+      const resolved = resolve(skillDir, file.path)
+      const rel = relative(skillDir, resolved)
+      if (rel.startsWith('..') || rel === '' || isAbsolute(rel)) {
+        return c.json({ error: `Invalid file path: ${file.path}` }, 400)
+      }
+    }
+
     // Check if already exists
     try {
       await readFile(join(skillDir, 'SKILL.md'), 'utf-8')
-      return c.json({ error: `Skill "${name}" already exists.` }, 409)
-    } catch {
-      // Expected — skill doesn't exist yet
+      return c.json({ error: `A skill with directory name "${name}" already exists. Use the edit dialog to update it, or delete it first to re-upload.` }, 409)
+    } catch (err: any) {
+      if (err.code !== 'ENOENT') throw err
     }
 
     // Write all files
@@ -305,10 +333,6 @@ skills.post('/import', async (c) => {
       await mkdir(dirname(filePath), { recursive: true })
       await writeFile(filePath, file.content, 'utf-8')
     }
-
-    // Parse SKILL.md for response
-    const skillMd = files.find((f) => f.path === 'SKILL.md')
-    const fm = skillMd ? parseFrontmatter(skillMd.content) : {}
     const config = await readConfig()
     const skillEntries: Record<string, unknown> = config?.skills?.entries ?? {}
 
@@ -502,6 +526,88 @@ skills.delete('/:skillName', async (c) => {
 
     await rm(found.dir, { recursive: true, force: true })
     return c.json({ deleted: true, name: skillName })
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500)
+  }
+})
+
+const SKIP_FILE_DIRS = new Set([
+  'node_modules',
+  '.git',
+  'pip_packages',
+  '__pycache__',
+  '.DS_Store',
+])
+
+// GET /api/skills/:skillName/files — list all files in a skill directory
+skills.get('/:skillName/files', async (c) => {
+  try {
+    const skillName = c.req.param('skillName')
+    const configDir = await getEffectiveConfigDir()
+    const found = await findSkillByName(join(configDir, 'skills'), skillName)
+    if (!found) {
+      return c.json({ error: `Skill "${skillName}" not found.` }, 404)
+    }
+
+    const files: string[] = []
+    async function walk(dir: string) {
+      let entries: string[]
+      try {
+        entries = await readdir(dir)
+      } catch {
+        return
+      }
+      for (const entry of entries) {
+        if (SKIP_FILE_DIRS.has(entry)) continue
+        const full = join(dir, entry)
+        const s = await stat(full)
+        if (s.isDirectory()) {
+          await walk(full)
+        } else {
+          files.push(relative(found.dir, full).replace(/\\/g, '/'))
+        }
+      }
+    }
+    await walk(found.dir)
+
+    return c.json({ files: files.sort() })
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500)
+  }
+})
+
+// GET /api/skills/:skillName/files/:path{.+} — read a single file
+skills.get('/:skillName/files/:path{.+}', async (c) => {
+  try {
+    const skillName = c.req.param('skillName')
+    const filePathParam = c.req.param('path')
+    if (!filePathParam) {
+      return c.json({ error: 'Missing file path.' }, 400)
+    }
+
+    const configDir = await getEffectiveConfigDir()
+    const found = await findSkillByName(join(configDir, 'skills'), skillName)
+    if (!found) {
+      return c.json({ error: `Skill "${skillName}" not found.` }, 404)
+    }
+
+    const targetPath = resolve(join(found.dir, filePathParam))
+    const skillDir = resolve(found.dir)
+    const rel = relative(skillDir, targetPath)
+    if (rel.startsWith('..') || rel === '' || isAbsolute(rel)) {
+      return c.json({ error: 'Invalid path.' }, 400)
+    }
+
+    if (!await stat(targetPath).then(s => s.isFile()).catch(() => false)) {
+      return c.json({ error: 'File not found.' }, 404)
+    }
+
+    try {
+      const content = await readFile(targetPath, 'utf-8')
+      return c.json({ path: filePathParam.replace(/\\/g, '/'), content })
+    } catch {
+      return c.json({ error: 'Binary file, cannot display.' }, 415)
+    }
   } catch (err: any) {
     return c.json({ error: err.message }, 500)
   }

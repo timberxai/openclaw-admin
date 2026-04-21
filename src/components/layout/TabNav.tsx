@@ -1,3 +1,4 @@
+import { useLocation, useNavigate } from 'react-router-dom'
 import { Users, Wrench, MessageSquare, Clock, Settings, SlidersHorizontal, FolderOpen, Activity } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import AgentsPage from "@/pages/AgentsPage"
@@ -20,9 +21,19 @@ const tabs = [
   { value: "settings", label: "Settings", icon: SlidersHorizontal },
 ] as const
 
+function getTabFromPath(path: string): string {
+  const first = path.split('/')[1]
+  const found = tabs.find((t) => t.value === first)
+  return found ? found.value : 'agents'
+}
+
 export default function TabNav() {
+  const location = useLocation()
+  const navigate = useNavigate()
+  const currentTab = getTabFromPath(location.pathname)
+
   return (
-    <Tabs defaultValue="agents">
+    <Tabs value={currentTab} onValueChange={(v) => navigate(`/${v}`)}>
       <TabsList className="gap-1 bg-secondary/50">
         {tabs.map(({ value, label, icon: Icon }) => (
           <TabsTrigger

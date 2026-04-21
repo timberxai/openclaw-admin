@@ -92,6 +92,15 @@ export interface SkillContent {
   content: string
 }
 
+export interface SkillFilesResponse {
+  files: string[]
+}
+
+export interface SkillFileContentResponse {
+  path: string
+  content: string
+}
+
 export const skillsApi = {
   list: (agentId?: string) =>
     fetchJSON<Skill[]>(`/skills${agentId ? `?agentId=${agentId}` : ''}`),
@@ -135,6 +144,11 @@ export const skillsApi = {
       method: 'PUT',
       body: JSON.stringify({ content }),
     }),
+  // Skill file tree (read-only preview)
+  getFiles: (skillName: string) =>
+    fetchJSON<SkillFilesResponse>(`/skills/${skillName}/files`),
+  getFileContent: (skillName: string, path: string) =>
+    fetchJSON<SkillFileContentResponse>(`/skills/${skillName}/files/${path}`),
 }
 
 // === Workspace Types ===

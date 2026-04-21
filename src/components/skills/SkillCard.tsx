@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Key, Download, Trash2, Pencil, Loader2, Upload } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -44,6 +45,7 @@ export default function SkillCard({
   isRemoving,
   publishingSkill,
 }: SkillCardProps) {
+  const navigate = useNavigate()
   const [confirmDelete, setConfirmDelete] = useState(false)
   const canInstall = agentId && skill.source !== 'workspace' && onInstall
   const canRemove = onRemove && (
@@ -57,7 +59,12 @@ export default function SkillCard({
       {/* Text content */}
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-white">{skill.name}</span>
+          <button
+            onClick={() => navigate(`/skills/${skill.name}`, { state: { skill } })}
+            className="text-sm font-semibold text-white hover:text-blue-400 hover:underline cursor-pointer"
+          >
+            {skill.name}
+          </button>
           {skill.hasConfig && (
             <span className="inline-flex items-center gap-0.5 rounded bg-yellow-500/15 px-1.5 py-0.5 text-[10px] font-medium text-yellow-400">
               <Key className="size-2.5" />
