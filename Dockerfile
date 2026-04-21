@@ -90,4 +90,7 @@ RUN npm install -g @larksuite/cli @larksuite/openclaw-lark-tools
 # Restore original workdir for openclaw
 WORKDIR /app
 
+# Allow arbitrary UID to write to home (e.g. .local, .npm, .config)
+RUN chmod 777 /home/node
+
 USER node
