@@ -1,36 +1,24 @@
-# hermes-admin image — nousresearch/hermes-agent:latest with web UI pre-built
-# and a startup script that runs both gateway (8642) and dashboard (9119) in
-# a single container.
-#
-# The official image runs `npm install && npm run build` on first dashboard
-# startup, which requires internet access and is unreliable in production.
-# This Dockerfile bakes the build in at image creation time.
+# hermes-admin image — nousresearch/hermes-agent:latest with lark-cli baked in.
+# Runs `hermes gateway run` only. The chat UI lives in the hermes-web-ui sidecar
+# container (see ../hermes-web-ui/), reached over docker DNS via UPSTREAM env;
+# closeclaw publishes the sidecar's TLS port externally, so this container
+# needs no Caddy and no public dashboard.
 
 FROM nousresearch/hermes-agent:latest
 
 USER root
 
-# Pre-build dashboard web UI so it starts instantly without network access.
-# After the build, remove package.json so hermes's _build_web_ui() skips the
-# npm-install check at runtime (it returns early when package.json is absent).
-# The built assets land in hermes_cli/web_dist/ (per vite outDir setting).
-RUN cd /opt/hermes/web && npm install && npm run build && rm package.json
-
-# Install Caddy for TLS termination — download binary directly to avoid gpg dependency.
-# Caddy terminates HTTPS on 9119 and proxies to hermes dashboard on 9120.
-RUN apt-get update -qq && apt-get install -y --no-install-recommends curl tar \
- && curl -fsSL "https://github.com/caddyserver/caddy/releases/download/v2.9.1/caddy_2.9.1_linux_amd64.tar.gz" \
-    | tar xz -C /usr/local/bin caddy \
- && chmod +x /usr/local/bin/caddy \
- && apt-get clean && rm -rf /var/lib/apt/lists/*
-
 # Install lark-cli globally so the hermes agent can create/update Feishu docs
 # via terminal commands instead of relying on MCP tools.
-RUN npm install -g @larksuite/cli
+#
+# @larksuite/cli's postinstall script (scripts/install.js) shells out to curl
+# to fetch the lark-cli binary release. The base image doesn't ship curl, so
+# install it (+ ca-certificates for HTTPS verify) before npm install runs.
+RUN apt-get update -qq && apt-get install -y --no-install-recommends curl ca-certificates \
+ && npm install -g @larksuite/cli \
+ && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Add startup script and Caddyfile
 COPY docker/start-hermes.sh /opt/start-hermes.sh
-COPY docker/hermes-caddy.Caddyfile /opt/hermes-caddy.Caddyfile
 RUN chmod +x /opt/start-hermes.sh
 
 ENTRYPOINT ["/opt/start-hermes.sh"]
