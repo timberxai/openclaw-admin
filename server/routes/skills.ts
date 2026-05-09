@@ -141,6 +141,33 @@ async function findSkillByName(
   return null
 }
 
+async function findSkillAnywhere(
+  skillName: string
+): Promise<{ dir: string; content: string; source: SkillSource } | null> {
+  const config = await readConfig()
+
+  // Workspace first (matches list endpoint's workspace > shared precedence)
+  const agentsList: any[] = config?.agents?.list ?? []
+  if (agentsList.length > 0) {
+    for (const agent of agentsList) {
+      const ws = agent.workspace ?? config?.agents?.defaults?.workspace
+      if (!ws) continue
+      const found = await findSkillByName(join(ws, 'skills'), skillName)
+      if (found) return { ...found, source: 'workspace' }
+    }
+  } else if (config?.agents?.defaults?.workspace) {
+    const found = await findSkillByName(join(config.agents.defaults.workspace, 'skills'), skillName)
+    if (found) return { ...found, source: 'workspace' }
+  }
+
+  // Shared fallback
+  const configDir = await getEffectiveConfigDir()
+  const shared = await findSkillByName(join(configDir, 'skills'), skillName)
+  if (shared) return { ...shared, source: 'shared' }
+
+  return null
+}
+
 /**
  * Resolve the three skill directories.
  */
@@ -380,13 +407,13 @@ skills.post('/:skillName/publish', async (c) => {
   }
 
   const body = await c.req.json<{ source?: string; agentId?: string }>().catch(() => ({}))
-  const config = await readConfig()
 
   // Resolve skill directory — try source hint first, then search all locations
   let skillDir: string | null = null
   let content: string | null = null
 
   if (body.source === 'workspace' && body.agentId) {
+    const config = await readConfig()
     const ws = getAgentWorkspace(config, body.agentId)
     if (ws) {
       const found = await findSkillByName(join(ws, 'skills'), skillName)
@@ -395,19 +422,8 @@ skills.post('/:skillName/publish', async (c) => {
   }
 
   if (!skillDir) {
-    // Try shared skills (configDir/skills/)
-    const configDir = await getEffectiveConfigDir()
-    const found = await findSkillByName(join(configDir, 'skills'), skillName)
+    const found = await findSkillAnywhere(skillName)
     if (found) { skillDir = found.dir; content = found.content }
-  }
-
-  if (!skillDir) {
-    // Try workspace skills (workspace/skills/)
-    const workspace = (config as any)?.agents?.defaults?.workspace
-    if (workspace) {
-      const found = await findSkillByName(join(workspace, 'skills'), skillName)
-      if (found) { skillDir = found.dir; content = found.content }
-    }
   }
 
   if (!skillDir || !content) {
@@ -462,8 +478,7 @@ skills.post('/:skillName/publish', async (c) => {
 skills.get('/:skillName/content', async (c) => {
   try {
     const skillName = c.req.param('skillName')
-    const configDir = await getEffectiveConfigDir()
-    const found = await findSkillByName(join(configDir, 'skills'), skillName)
+    const found = await findSkillAnywhere(skillName)
     if (!found) {
       return c.json({ error: `Skill "${skillName}" not found.` }, 404)
     }
@@ -485,8 +500,7 @@ skills.put('/:skillName', async (c) => {
       return c.json({ error: 'Missing "content" in request body.' }, 400)
     }
 
-    const configDir = await getEffectiveConfigDir()
-    const found = await findSkillByName(join(configDir, 'skills'), skillName)
+    const found = await findSkillAnywhere(skillName)
     if (!found) {
       return c.json({ error: `Skill "${skillName}" not found.` }, 404)
     }
@@ -503,7 +517,7 @@ skills.put('/:skillName', async (c) => {
       description: fm.description || '',
       group: fm.group || fm.category || 'general',
       hasConfig: skillName in skillEntries || (fm.name || skillName) in skillEntries,
-      source: 'shared' as const,
+      source: found.source,
     })
   } catch (err: any) {
     return c.json({ error: err.message }, 500)
@@ -518,8 +532,7 @@ skills.delete('/:skillName', async (c) => {
       return c.json({ error: 'Invalid skill name.' }, 400)
     }
 
-    const configDir = await getEffectiveConfigDir()
-    const found = await findSkillByName(join(configDir, 'skills'), skillName)
+    const found = await findSkillAnywhere(skillName)
     if (!found) {
       return c.json({ error: `Skill "${skillName}" not found.` }, 404)
     }
@@ -543,8 +556,7 @@ const SKIP_FILE_DIRS = new Set([
 skills.get('/:skillName/files', async (c) => {
   try {
     const skillName = c.req.param('skillName')
-    const configDir = await getEffectiveConfigDir()
-    const found = await findSkillByName(join(configDir, 'skills'), skillName)
+    const found = await findSkillAnywhere(skillName)
     if (!found) {
       return c.json({ error: `Skill "${skillName}" not found.` }, 404)
     }
@@ -585,8 +597,7 @@ skills.get('/:skillName/files/:path{.+}', async (c) => {
       return c.json({ error: 'Missing file path.' }, 400)
     }
 
-    const configDir = await getEffectiveConfigDir()
-    const found = await findSkillByName(join(configDir, 'skills'), skillName)
+    const found = await findSkillAnywhere(skillName)
     if (!found) {
       return c.json({ error: `Skill "${skillName}" not found.` }, 404)
     }
