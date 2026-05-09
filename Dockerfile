@@ -4,7 +4,7 @@ FROM alpine/openclaw AS builder
 USER root
 WORKDIR /build
 
-COPY package.json package-lock.json ./
+COPY package.json package-lock.json .npmrc ./
 RUN NODE_ENV=development npm ci
 
 COPY . .
@@ -22,7 +22,7 @@ RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debia
 # Install admin into /opt/openclaw-admin/
 WORKDIR /opt/openclaw-admin
 
-COPY package.json package-lock.json ./
+COPY package.json package-lock.json .npmrc ./
 RUN NODE_ENV=development npm ci
 
 # Copy built frontend
