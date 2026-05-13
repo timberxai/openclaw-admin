@@ -412,8 +412,9 @@ skills.post('/:skillName/publish', async (c) => {
   let skillDir: string | null = null
   let content: string | null = null
 
+  const config = await readConfig()
+
   if (body.source === 'workspace' && body.agentId) {
-    const config = await readConfig()
     const ws = getAgentWorkspace(config, body.agentId)
     if (ws) {
       const found = await findSkillByName(join(ws, 'skills'), skillName)
