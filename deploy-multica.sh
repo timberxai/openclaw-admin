@@ -13,10 +13,11 @@
 #   Multica Backend  : 26000+     (本脚本，frontend_offset 一致：24010 ↔ 26010)
 #
 # 用法：
-#   ./deploy-multica.sh <username> <port_offset>
+#   ./deploy-multica.sh <username> <port_offset> [service_host]
 #
 # 例（user-jun 拿到 frontend=24010, backend=26010）：
 #   ./deploy-multica.sh user-jun 10
+#   ./deploy-multica.sh user-jun 10 oc.l.yuanmu-ai.com
 #
 # 产物（脚本同级目录下，便于跟随仓库管理）：
 #   <script_dir>/multica-deployments/<username>/
@@ -32,8 +33,9 @@ set -euo pipefail
 MULTICA_FRONTEND_PORT_BASE=24000
 MULTICA_BACKEND_PORT_BASE=26000
 
-USERNAME="${1:?usage: $0 <username> <port_offset>}"
-PORT_OFFSET="${2:?usage: $0 <username> <port_offset>   (e.g. 10 → frontend=24010, backend=26010)}"
+USERNAME="${1:?usage: $0 <username> <port_offset> [service_host]}"
+PORT_OFFSET="${2:?usage: $0 <username> <port_offset> [service_host]   (e.g. 10 → frontend=24010, backend=26010)}"
+SERVICE_HOST="${3:-oc.l.yuanmu-ai.com}"
 
 FRONTEND_PORT=$((MULTICA_FRONTEND_PORT_BASE + PORT_OFFSET))
 BACKEND_PORT=$((MULTICA_BACKEND_PORT_BASE + PORT_OFFSET))
@@ -67,6 +69,7 @@ MULTICA_DEV_VERIFICATION_CODE=888888
 PORT=8080
 FRONTEND_PORT=${FRONTEND_PORT}
 BACKEND_PORT=${BACKEND_PORT}
+SERVICE_HOST=${SERVICE_HOST}
 
 # Multica image channel
 MULTICA_IMAGE_TAG=latest
@@ -145,15 +148,15 @@ services:
       postgres:
         condition: service_healthy
     ports:
-      - "127.0.0.1:\${BACKEND_PORT}:8080"
+      - "0.0.0.0:\${BACKEND_PORT}:8080"
     environment:
       DATABASE_URL: postgres://\${POSTGRES_USER}:\${POSTGRES_PASSWORD}@postgres:5432/\${POSTGRES_DB}?sslmode=disable
       PORT: "8080"
       JWT_SECRET: \${JWT_SECRET}
       APP_ENV: \${APP_ENV}
       MULTICA_DEV_VERIFICATION_CODE: \${MULTICA_DEV_VERIFICATION_CODE}
-      MULTICA_APP_URL: http://localhost:\${FRONTEND_PORT}
-      FRONTEND_ORIGIN: http://localhost:\${FRONTEND_PORT}
+      MULTICA_APP_URL: https://\${SERVICE_HOST}:\${FRONTEND_PORT}
+      FRONTEND_ORIGIN: https://\${SERVICE_HOST}:\${FRONTEND_PORT}
     restart: unless-stopped
 
   frontend:
@@ -161,7 +164,7 @@ services:
     depends_on:
       - backend
     ports:
-      - "127.0.0.1:\${FRONTEND_PORT}:3000"
+      - "0.0.0.0:\${FRONTEND_PORT}:3000"
     environment:
       HOSTNAME: "0.0.0.0"
     restart: unless-stopped
@@ -205,8 +208,8 @@ docker compose up -d
 
 echo
 echo "✓ Deployed multica for ${USERNAME}"
-echo "  Frontend:        http://localhost:${FRONTEND_PORT}"
-echo "  Backend:         http://localhost:${BACKEND_PORT}"
+echo "  Frontend:        https://${SERVICE_HOST}:${FRONTEND_PORT}"
+echo "  Backend:         https://${SERVICE_HOST}:${BACKEND_PORT}"
 echo "  Login code:      888888 (APP_ENV=development)"
 echo "  Compose root:    ${ROOT}"
 echo
