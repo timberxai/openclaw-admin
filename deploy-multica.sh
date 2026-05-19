@@ -18,8 +18,8 @@
 # 例（user-jun 拿到 frontend=24010, backend=26010）：
 #   ./deploy-multica.sh user-jun 10
 #
-# 产物：
-#   /opt/closeclaw-multica/<username>/
+# 产物（脚本同级目录下，便于跟随仓库管理）：
+#   <script_dir>/multica-deployments/<username>/
 #     ├── docker-compose.yml      # postgres + backend + frontend + daemon
 #     ├── .env                    # 该用户的密钥/端口/容器名
 #     ├── wrappers/
@@ -42,8 +42,9 @@ BACKEND_PORT=$((MULTICA_BACKEND_PORT_BASE + PORT_OFFSET))
 OPENCLAW_CONTAINER="oc-${USERNAME}"
 HERMES_CONTAINER="hermes-hermes-${USERNAME#user-}"  # hermes 命名去掉 user- 前缀
 
-# 部署根目录（每用户一个子目录，便于独立管理）
-ROOT="/opt/closeclaw-multica/${USERNAME}"
+# 部署根目录（脚本同级 multica-deployments/，每用户一个子目录）
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="${SCRIPT_DIR}/multica-deployments/${USERNAME}"
 mkdir -p "${ROOT}/wrappers"
 
 # ── 1. 生成 .env ──
