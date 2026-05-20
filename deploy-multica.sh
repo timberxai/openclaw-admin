@@ -192,24 +192,78 @@ services:
       - ./wrappers/hermes:/usr/local/bin/hermes:ro
       # Shared workspaces — must mount to the SAME path in oc-* and hermes-* containers
       - multica-workspaces:/multica-workspaces
+      # Persist daemon auth config across restarts
+      - daemon-config:/root/.config
     restart: unless-stopped
 
 volumes:
   pgdata:
   multica-workspaces:
     name: multica-workspaces-${USERNAME}
+  daemon-config:
+    name: multica-daemon-config-${USERNAME}
 EOF
 
 # ── 5. 启动 ──
 cd "${ROOT}"
-docker compose pull postgres backend frontend
 docker compose build daemon
 docker compose up -d
 
+# ── 6. 自动登录 daemon ──
+# 等 backend 就绪
+echo "Waiting for backend to be ready..."
+for i in $(seq 1 30); do
+  if curl -sf http://localhost:${BACKEND_PORT}/api/v1/version > /dev/null 2>&1 || \
+     curl -sf -o /dev/null -w '%{http_code}' http://localhost:${BACKEND_PORT}/auth/send-code 2>/dev/null | grep -q '4'; then
+    break
+  fi
+  sleep 2
+done
+
+# 用 dev verification code 登录拿 JWT
+DEV_EMAIL="daemon-${USERNAME}@multica.local"
+curl -sf http://localhost:${BACKEND_PORT}/auth/send-code \
+  -X POST -H 'Content-Type: application/json' \
+  -d "{\"email\":\"${DEV_EMAIL}\"}" > /dev/null
+
+JWT=$(curl -sf http://localhost:${BACKEND_PORT}/auth/verify-code \
+  -X POST -H 'Content-Type: application/json' \
+  -d "{\"email\":\"${DEV_EMAIL}\",\"code\":\"${MULTICA_DEV_VERIFICATION_CODE:-888888}\"}" \
+  | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
+
+if [ -n "${JWT}" ]; then
+  # 创建 personal access token
+  PAT=$(curl -sf http://localhost:${BACKEND_PORT}/api/tokens \
+    -X POST -H 'Content-Type: application/json' \
+    -H "Authorization: Bearer ${JWT}" \
+    -d '{"name":"daemon-auto"}' \
+    | grep -o '"token":"mul_[^"]*"' | cut -d'"' -f4)
+
+  if [ -n "${PAT}" ]; then
+    # 用 PAT 登录 daemon（写入 daemon-config volume）
+    COMPOSE_PROJECT="multica-${USERNAME}"
+    docker run --rm \
+      --network "${COMPOSE_PROJECT}_default" \
+      -v "multica-daemon-config-${USERNAME}:/root/.config" \
+      -e MULTICA_SERVER_URL=http://backend:8080 \
+      --entrypoint multica \
+      "${COMPOSE_PROJECT}-daemon" \
+      login --token "${PAT}" 2>&1 | head -3
+
+    # 重启 daemon 使其读到新 config
+    docker compose restart daemon
+    echo "✓ Daemon authenticated automatically"
+  else
+    echo "⚠ Could not create PAT — run 'multica login' manually in daemon container"
+  fi
+else
+  echo "⚠ Could not get JWT — run 'multica login' manually in daemon container"
+fi
+
 echo
 echo "✓ Deployed multica for ${USERNAME}"
-echo "  Frontend:        https://${SERVICE_HOST}:${FRONTEND_PORT}"
-echo "  Backend:         https://${SERVICE_HOST}:${BACKEND_PORT}"
+echo "  Frontend:        http://${SERVICE_HOST}:${FRONTEND_PORT}"
+echo "  Backend:         http://${SERVICE_HOST}:${BACKEND_PORT}"
 echo "  Login code:      888888 (APP_ENV=development)"
 echo "  Compose root:    ${ROOT}"
 echo
