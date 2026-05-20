@@ -155,8 +155,8 @@ services:
       JWT_SECRET: \${JWT_SECRET}
       APP_ENV: \${APP_ENV}
       MULTICA_DEV_VERIFICATION_CODE: \${MULTICA_DEV_VERIFICATION_CODE}
-      MULTICA_APP_URL: https://\${SERVICE_HOST}:\${FRONTEND_PORT}
-      FRONTEND_ORIGIN: https://\${SERVICE_HOST}:\${FRONTEND_PORT}
+      MULTICA_APP_URL: http://\${SERVICE_HOST}:\${FRONTEND_PORT}
+      FRONTEND_ORIGIN: http://\${SERVICE_HOST}:\${FRONTEND_PORT}
     restart: unless-stopped
 
   frontend:
