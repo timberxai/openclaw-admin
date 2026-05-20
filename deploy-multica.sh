@@ -1,34 +1,35 @@
 #!/bin/bash
-# deploy-multica.sh — 为单个用户部署 Multica（Server + Daemon）。
+# ─────────────────────────────────────────────────────────────────────────────
+# DEPRECATED — multica 部署已迁到 closeclaw Multica 模块。
 #
-# 复用 Multica 官方 docker-compose.selfhost.yml，不重新打包镜像。
-# 在此基础上额外起一个 daemon 容器（含 docker CLI + openclaw/hermes wrapper），
-# 通过共享 docker.sock 桥接到该用户已有的 oc-<user> / hermes-hermes-<user> 容器。
+# 本脚本生成的栈：
+#   - 端口 plain HTTP (24010/26010)，没有 TLS
+#   - 起一个独立 daemon 容器走 docker exec 桥接（实际用不上，下游已切到
+#     in-container daemon 形态）
+#   - 不感知 closeclaw 的 owner / Service 数据
 #
-# 端口规划（与 closeclaw docker_utils.py 对齐）：
-#   OpenClaw gateway : 19000+
-#   Hermes API       : 20000+
-#   Hermes WebUI     : 22000+
-#   Multica Frontend : 24000+     (本脚本)
-#   Multica Backend  : 26000+     (本脚本，frontend_offset 一致：24010 ↔ 26010)
+# 推荐流程（在 closeclaw 后端跑）：
+#   1) 一次性安装：
+#        cd ~/closeclaw && uv run python manage.py fetch_multica_binary
+#        uv run python manage.py pull_multica_images
+#   2) 通过 closeclaw 前端 Multica 页一键起栈、bind oc/hermes（强制同 owner）
 #
-# 用法：
-#   ./deploy-multica.sh <username> <port_offset> [service_host]
+# 形态差异：closeclaw 起的栈是 4 容器（postgres+backend+frontend+caddy），
+# 端口 24443+/26443+（HTTPS-only，用 ssl/cert.{pem,key} 通配证书）。daemon 跑
+# 在用户已有的 oc-<user>/hermes-<user> 容器内，登录态走 closeclaw 挂载持久化。
 #
-# 例（user-jun 拿到 frontend=24010, backend=26010）：
-#   ./deploy-multica.sh user-jun 10
-#   ./deploy-multica.sh user-jun 10 oc.l.yuanmu-ai.com
-#
-# 产物（脚本同级目录下，便于跟随仓库管理）：
-#   <script_dir>/multica-deployments/<username>/
-#     ├── docker-compose.yml      # postgres + backend + frontend + daemon
-#     ├── .env                    # 该用户的密钥/端口/容器名
-#     ├── wrappers/
-#     │   ├── openclaw            # docker exec -i oc-<user> openclaw
-#     │   └── hermes              # docker exec -i hermes-hermes-<user> /opt/hermes/.venv/bin/hermes
-#     └── Dockerfile.daemon       # 极简镜像：multica CLI + docker CLI + wrapper
+# 如果你确定要继续运行本脚本（手工灾备 / 离线场景），加 --i-know-deprecated。
+# ─────────────────────────────────────────────────────────────────────────────
 
 set -euo pipefail
+
+if [[ "${1:-}" != "--i-know-deprecated" ]]; then
+  echo "DEPRECATED: deploy-multica.sh is superseded by closeclaw Multica UI." >&2
+  echo "See header for the new flow. Pass --i-know-deprecated as the first" >&2
+  echo "argument if you intentionally want to use this manual script." >&2
+  exit 1
+fi
+shift  # drop --i-know-deprecated so the rest of argv keeps its old positions
 
 MULTICA_FRONTEND_PORT_BASE=24000
 MULTICA_BACKEND_PORT_BASE=26000
