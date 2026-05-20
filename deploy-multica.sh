@@ -193,7 +193,7 @@ services:
       # Shared workspaces — must mount to the SAME path in oc-* and hermes-* containers
       - multica-workspaces:/multica-workspaces
       # Persist daemon auth config across restarts
-      - daemon-config:/root/.config
+      - daemon-config:/root/.multica
     restart: unless-stopped
 
 volumes:
@@ -244,7 +244,7 @@ if [ -n "${JWT}" ]; then
     COMPOSE_PROJECT="multica-${USERNAME}"
     docker run --rm \
       --network "${COMPOSE_PROJECT}_default" \
-      -v "multica-daemon-config-${USERNAME}:/root/.config" \
+      -v "multica-daemon-config-${USERNAME}:/root/.multica" \
       -e MULTICA_SERVER_URL=http://backend:8080 \
       --entrypoint multica \
       "${COMPOSE_PROJECT}-daemon" \
