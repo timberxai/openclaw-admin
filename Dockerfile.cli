@@ -1,0 +1,52 @@
+# cli image — node:22-alpine with @anthropic-ai/claude-code + @openai/codex baked in.
+# Runs exec-only inside closeclaw: the backend (docker_utils.start_cli_container)
+# starts it with no published ports and injects ANTHROPIC_* / OPENAI_* / CODEX_*
+# env, then exec's `claude` / `codex` on demand. No sshd, no dashboard.
+FROM node:22-alpine
+
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG http_proxy
+ARG https_proxy
+
+ENV CLAUDE_CODE_DOCKER=1
+ENV PATH="/root/.local/bin:${PATH}"
+ENV UV_CACHE_DIR=/root/.cache/uv
+ENV HTTP_PROXY=${HTTP_PROXY}
+ENV HTTPS_PROXY=${HTTPS_PROXY}
+ENV http_proxy=${http_proxy}
+ENV https_proxy=${https_proxy}
+
+RUN apk add --no-cache \
+    git \
+    curl \
+    ca-certificates \
+    bash \
+    ripgrep \
+    libgcc \
+    libstdc++ \
+    shadow \
+    build-base \
+    python3-dev \
+    python3 \
+    py3-pip
+
+# Install uv (Python package manager)
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
+    ln -s /root/.local/bin/uv /usr/local/bin/uv && \
+    ln -s /root/.local/bin/uvx /usr/local/bin/uvx
+
+# Install agent CLIs via npm (more reliable behind proxies)
+RUN npm install -g \
+    @anthropic-ai/claude-code \
+    @openai/codex
+
+# Setup bash as default shell for root
+RUN sed -i 's|root:/bin/[^:]*|root:/bin/bash|' /etc/passwd
+
+WORKDIR /workspace
+
+COPY docker/entrypoint-cli.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
