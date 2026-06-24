@@ -11,7 +11,9 @@ write_export() {
 
 {
     echo "# Docker environment variables"
-    write_export ANTHROPIC_API_KEY
+    # claude-code auths to non-anthropic gateways via ANTHROPIC_AUTH_TOKEN
+    # (Bearer); ANTHROPIC_API_KEY would force the TUI onto api.anthropic.com.
+    write_export ANTHROPIC_AUTH_TOKEN
     write_export ANTHROPIC_BASE_URL
     write_export ANTHROPIC_MODEL
     write_export OPENAI_API_KEY
