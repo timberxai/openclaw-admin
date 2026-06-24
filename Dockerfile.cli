@@ -23,6 +23,7 @@ RUN apk add --no-cache \
     ca-certificates \
     bash \
     ripgrep \
+    bubblewrap \
     libgcc \
     libstdc++ \
     shadow \

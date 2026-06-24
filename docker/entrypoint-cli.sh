@@ -55,6 +55,16 @@ elif ! grep -q '^cli_auth_credentials_store[[:space:]]*=' /root/.codex/config.to
     } >> /root/.codex/config.toml
 fi
 
+# Make /workspace a git repo so `codex exec` runs without --skip-git-repo-check.
+# /workspace is a bind-mounted volume owned by root, which git flags as "dubious
+# ownership"; mark it safe first. Idempotent: skip if already a repo.
+git config --global --add safe.directory /workspace
+if ! git -C /workspace rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    git -C /workspace init -q
+    git -C /workspace config user.email "cli@local"
+    git -C /workspace config user.name "cli"
+fi
+
 echo "============================================"
 echo " cli container is running (claude / codex)"
 echo "============================================"
