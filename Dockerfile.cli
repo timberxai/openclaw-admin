@@ -37,10 +37,13 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
     ln -s /root/.local/bin/uv /usr/local/bin/uv && \
     ln -s /root/.local/bin/uvx /usr/local/bin/uvx
 
-# Install agent CLIs via npm (more reliable behind proxies)
+# Install agent CLIs via npm (more reliable behind proxies). lark-channel-bridge
+# is the feishu <-> claude/codex bot; the entrypoint auto-starts it once paired
+# (pairing config persists on the mounted /root/.lark-channel volume).
 RUN npm install -g \
     @anthropic-ai/claude-code \
-    @openai/codex
+    @openai/codex \
+    lark-channel-bridge
 
 # Setup bash as default shell for root
 RUN sed -i 's|root:/bin/[^:]*|root:/bin/bash|' /etc/passwd

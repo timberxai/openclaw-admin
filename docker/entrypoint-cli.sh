@@ -67,6 +67,18 @@ if ! git -C /workspace rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     git -C /workspace config user.name "cli"
 fi
 
+# Auto-start the lark-channel-bridge (feishu <-> claude/codex) if it's been
+# paired. The QR pairing writes /root/.lark-channel/config.json, which lives on
+# a mounted volume and survives recreate; the container has no systemd, so we
+# supervise it here. No config = not paired yet => skip (other cli services and
+# the first-run `lark-channel-bridge run` scan are unaffected).
+if command -v lark-channel-bridge >/dev/null 2>&1 && [ -f /root/.lark-channel/config.json ]; then
+    echo "[lark-bridge] paired config found — starting bridge in background"
+    nohup lark-channel-bridge run >> /root/.lark-channel/bridge.log 2>&1 &
+else
+    echo "[lark-bridge] not paired (no /root/.lark-channel/config.json) — skipping"
+fi
+
 echo "============================================"
 echo " cli container is running (claude / codex)"
 echo "============================================"
