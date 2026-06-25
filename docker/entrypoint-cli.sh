@@ -73,6 +73,12 @@ fi
 # supervise it here. No config = not paired yet => skip (other cli services and
 # the first-run `lark-channel-bridge run` scan are unaffected).
 if command -v lark-channel-bridge >/dev/null 2>&1 && [ -f /root/.lark-channel/config.json ]; then
+    # Clear stale process registry/locks. The lock holder is tracked by PID on
+    # the mounted volume, but PIDs are per-container — after a recreate the old
+    # PID is gone yet the lock persists, so bridge wrongly reports "profile
+    # already in use" and refuses to start. At container boot no bridge runs in
+    # THIS container, so any registry entry is a leftover and safe to purge.
+    rm -rf /root/.lark-channel/registry/locks/* /root/.lark-channel/registry/processes.json 2>/dev/null || true
     echo "[lark-bridge] paired config found — starting bridge in background"
     nohup lark-channel-bridge run >> /root/.lark-channel/bridge.log 2>&1 &
 else
