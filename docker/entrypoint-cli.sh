@@ -79,6 +79,29 @@ if command -v lark-channel-bridge >/dev/null 2>&1 && [ -f /root/.lark-channel/co
     # already in use" and refuses to start. At container boot no bridge runs in
     # THIS container, so any registry entry is a leftover and safe to purge.
     rm -rf /root/.lark-channel/registry/locks/* /root/.lark-channel/registry/processes.json 2>/dev/null || true
+    # Point each profile's default workspace at /workspace (mounted, persistent,
+    # a git repo). Bridge's own default is /root/.lark-channel-workspaces/<p>/default,
+    # which isn't on any volume and isn't created — agents then fail with
+    # "工作目录不存在或不可访问". Only rewrite that bridge-managed default; a
+    # user's own /cd target is left untouched.
+    python3 - <<'PYEOF' || true
+import json
+p = "/root/.lark-channel/config.json"
+try:
+    d = json.load(open(p))
+except Exception:
+    raise SystemExit(0)
+changed = False
+for name, prof in (d.get("profiles") or {}).items():
+    ws = prof.setdefault("workspaces", {})
+    cur = ws.get("default", "")
+    if cur != "/workspace" and (not cur or "/.lark-channel-workspaces/" in cur):
+        ws["default"] = "/workspace"
+        changed = True
+        print(f"[lark-bridge] profile {name}: default workspace -> /workspace")
+if changed:
+    json.dump(d, open(p, "w"), ensure_ascii=False, indent=2)
+PYEOF
     echo "[lark-bridge] paired config found — starting bridge in background"
     nohup lark-channel-bridge run >> /root/.lark-channel/bridge.log 2>&1 &
 else
