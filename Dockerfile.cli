@@ -19,6 +19,7 @@ ENV https_proxy=${https_proxy}
 
 RUN apk add --no-cache \
     git \
+    openssh-client \
     curl \
     ca-certificates \
     bash \
