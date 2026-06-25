@@ -102,8 +102,19 @@ for name, prof in (d.get("profiles") or {}).items():
 if changed:
     json.dump(d, open(p, "w"), ensure_ascii=False, indent=2)
 PYEOF
-    echo "[lark-bridge] paired config found — starting bridge in background"
-    nohup lark-channel-bridge run >> /root/.lark-channel/bridge.log 2>&1 &
+    echo "[lark-bridge] paired config found — starting supervised bridge in background"
+    # Supervise: a bare `run` isn't restarted if it crashes/exits, and the
+    # container has no systemd. Loop with backoff; purge the stale lock each
+    # round (this container's previous bridge instance may have left one).
+    (
+      while true; do
+        rm -rf /root/.lark-channel/registry/locks/* /root/.lark-channel/registry/processes.json 2>/dev/null || true
+        echo "[lark-bridge] $(date -u +%FT%TZ) starting bridge run" >> /root/.lark-channel/bridge.log
+        lark-channel-bridge run >> /root/.lark-channel/bridge.log 2>&1
+        echo "[lark-bridge] $(date -u +%FT%TZ) bridge exited ($?), restarting in 5s" >> /root/.lark-channel/bridge.log
+        sleep 5
+      done
+    ) &
 else
     echo "[lark-bridge] not paired (no /root/.lark-channel/config.json) — skipping"
 fi
