@@ -99,6 +99,15 @@ for name, prof in (d.get("profiles") or {}).items():
         ws["default"] = "/workspace"
         changed = True
         print(f"[lark-bridge] profile {name}: default workspace -> /workspace")
+    # Claude CLI rejects bypassPermissions under root; cap at workspace.
+    if prof.get("agentKind") == "claude":
+        perms = prof.get("permissions", {})
+        if perms.get("defaultAccess") == "full" or perms.get("maxAccess") == "full":
+            perms["defaultAccess"] = "workspace"
+            perms["maxAccess"] = "workspace"
+            prof["permissions"] = perms
+            changed = True
+            print(f"[lark-bridge] profile {name}: permissions full -> workspace (root+claude)")
 if changed:
     json.dump(d, open(p, "w"), ensure_ascii=False, indent=2)
 PYEOF
