@@ -57,6 +57,26 @@ elif ! grep -q '^cli_auth_credentials_store[[:space:]]*=' /root/.codex/config.to
     } >> /root/.codex/config.toml
 fi
 
+# claude-code (running as root, capped at workspace/acceptEdits by the
+# lark-channel profile rewrite below) needs to read feishu attachments that
+# download outside /workspace, and to invoke lark-cli for feishu API access.
+# acceptEdits honors settings allow-rules even headless. Merge idempotently —
+# never clobber the user's own theme / added rules.
+mkdir -p /root/.claude
+python3 - <<'PYEOF' || true
+import json, os
+p = "/root/.claude/settings.json"
+try:
+    d = json.load(open(p)) if os.path.exists(p) else {}
+except Exception:
+    d = {}
+allow = d.setdefault("permissions", {}).setdefault("allow", [])
+for rule in ("Read(//root/.lark-channel/**)", "Bash(lark-cli:*)"):
+    if rule not in allow:
+        allow.append(rule)
+json.dump(d, open(p, "w"), ensure_ascii=False, indent=2)
+PYEOF
+
 # Make /workspace a git repo so `codex exec` runs without --skip-git-repo-check.
 # /workspace is a bind-mounted volume owned by root, which git flags as "dubious
 # ownership"; mark it safe first. Idempotent: skip if already a repo.
